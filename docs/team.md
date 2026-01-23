@@ -6,11 +6,11 @@ title:  Team
 # {{ page.title }}
 
 
-## USER 1
-***UCI Net ID***: ucinetid1
+## Carol Wang
+***UCI Net ID***: carolw6@uci.edu
 
-## USER 2
-***UCI Net ID***: ucinetid2
+## Natalie Perrochon
+***UCI Net ID***: nperroch@uci.edu
 
-## USER 3
-***UCI Net ID***: ucinetid3
+## Nikolaj Kim
+***UCI Net ID***: nikolajk@uci.edu
