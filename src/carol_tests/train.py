@@ -1,11 +1,17 @@
 import gymnasium as gym
-import PyFlyt.gym_envs
 from PyFlyt.gym_envs import FlattenWaypointEnv
 from stable_baselines3 import PPO
+from quadx_forest_env import QuadXForestEnv
 
 # adjust training timestep as needed. 500,000 takes my computer around 10 minutes fyi
 
-env = gym.make("PyFlyt/QuadX-Waypoints-v4")
+#env = gym.make("PyFlyt/QuadX-Waypoints-v4")
+env = QuadXForestEnv(
+    render_mode=None,
+    num_trees=10,
+    tree_radius_range=(0.1, 0.3),
+    tree_height_range=(2.0, 4.0)
+)
 env = FlattenWaypointEnv(env, context_length=2)
 
 model = PPO(
@@ -18,7 +24,7 @@ model = PPO(
     learning_rate=3e-4,
 )
 
-model.learn(total_timesteps=500_000, tb_log_name="quadx_waypoints")
+model.learn(total_timesteps=100_000, tb_log_name="quadx_waypoints")
 model.save("quadx_waypoints")
 env.close()
 
