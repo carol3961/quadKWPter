@@ -6,12 +6,7 @@ from quadx_forest_env import QuadXForestEnv
 # adjust training timestep as needed. 500,000 takes my computer around 10 minutes fyi
 
 #env = gym.make("PyFlyt/QuadX-Waypoints-v4")
-env = QuadXForestEnv(
-    render_mode=None,
-    num_trees=10,
-    tree_radius_range=(0.1, 0.3),
-    tree_height_range=(2.0, 4.0)
-)
+env = QuadXForestEnv(render_mode=None)
 env = FlattenWaypointEnv(env, context_length=2)
 
 model = PPO(
