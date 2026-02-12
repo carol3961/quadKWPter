@@ -1,34 +1,35 @@
-import gymnasium as gym
-from PyFlyt.gym_envs import FlattenWaypointEnv
 from stable_baselines3 import PPO
+from stable_baselines3.common.env_util import make_vec_env
 from quadx_forest_env import QuadXForestEnv
+from PyFlyt.gym_envs import FlattenWaypointEnv
 
-# adjust training timestep as needed. 500,000 takes my computer around 10 minutes fyi
+# Create vectorized environment for training
+def make_env():
+    env = QuadXForestEnv(
+        num_trees=5,
+        num_targets=1,
+        num_sensors=8,
+        sensor_range=5.0,
+        max_duration_seconds=30.0,
+        flight_dome_size=12.0
+    )
+    env = FlattenWaypointEnv(env, context_length=1)
+    return env
 
-#env = gym.make("PyFlyt/QuadX-Waypoints-v4")
-env = QuadXForestEnv(
-    render_mode=None,
-    num_trees=10,
-    tree_radius_range=(0.1, 0.3),
-    tree_height_range=(2.0, 4.0),
-    num_targets=1
-)
-env = FlattenWaypointEnv(env, context_length=2)
+env = make_vec_env(make_env, n_envs=4)  # 4 parallel environments
 
+# Train model
 model = PPO(
     "MlpPolicy",
     env,
-    verbose=0,  # 0 for no output, 1 for info, 2 for debug
-    tensorboard_log="./tb_logs", 
+    verbose=0,
+    tensorboard_log="./quadx_forest_avoidance_logs/",
+    learning_rate=3e-4,
     n_steps=2048,
     batch_size=64,
-    learning_rate=3e-4,
+    n_epochs=10,
+    gamma=0.99
 )
 
-model.learn(total_timesteps=100_000, tb_log_name="quadx_waypoints")
-model.save("quadx_waypoints")
-env.close()
-
-# tensorboard --logdir tb_logs
-# type this ^ once ur model is done learning. itll open a local server u can view in ur browser. 
-# need to pip install tensorflow for this to work
+model.learn(total_timesteps=200_000)
+model.save("quadx_forest_avoidance")
