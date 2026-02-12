@@ -10,7 +10,8 @@ env = QuadXForestEnv(
     render_mode=None,
     num_trees=10,
     tree_radius_range=(0.1, 0.3),
-    tree_height_range=(2.0, 4.0)
+    tree_height_range=(2.0, 4.0),
+    num_targets=1
 )
 env = FlattenWaypointEnv(env, context_length=2)
 
