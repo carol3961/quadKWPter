@@ -1,11 +1,15 @@
-import gymnasium as gym
+from quadx_forest_env import QuadXForestEnv
 from PyFlyt.gym_envs import FlattenWaypointEnv
 from stable_baselines3 import PPO
-from quadx_forest_env import QuadXForestEnv
 
-#env = gym.make("PyFlyt/QuadX-Waypoints-v4", render_mode="human")
-env = QuadXForestEnv(render_mode="human")
-env = FlattenWaypointEnv(env, context_length=2)
+env = QuadXForestEnv(
+    render_mode="human",
+    num_trees=5,
+    num_targets=1,
+    num_sensors=8,
+    sensor_range=5.0
+)
+env = FlattenWaypointEnv(env, context_length=1)
 
 model = PPO.load("quadx_waypoints.zip", env=env)
 
