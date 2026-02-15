@@ -58,6 +58,8 @@ class TensorboardVideoRecorder(VecEnvWrapper):
 
     @staticmethod
     def _encode_gif(frames, fps):
+        if frames[0].shape[-1] == 4:
+            frames = [f[..., :3] for f in frames]
         h, w, c = frames[0].shape
         pxfmt = {1: 'gray', 3: 'rgb24'}[c]
         cmd = ' '.join([

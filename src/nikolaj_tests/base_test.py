@@ -7,38 +7,23 @@ from PyFlyt.gym_envs import FlattenWaypointEnv
 from stable_baselines3 import PPO
 from stable_baselines3.common.monitor import Monitor
 from stable_baselines3.common.callbacks import CheckpointCallback
+from stable_baselines3.common.vec_env import VecNormalize
+from stable_baselines3.common.vec_env import VecFrameStack
+from stable_baselines3.common.env_util import make_vec_env
+from stable_baselines3.common.vec_env import SubprocVecEnv
 
 from tensorboard_video_recorder import TensorboardVideoRecorder
 from datetime import datetime
-experiment_name = "cluster_run"
-run_id = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-experiment_logdir = f"quadKWPter_logs/{experiment_name}/{run_id}"
 
-checkpoint_dir = f"./checkpoints/{experiment_name}/"
-os.makedirs(checkpoint_dir, exist_ok=True)
+NUM_ENVS = 8
+VID_LEN = 2000
+FPS = 30
+TOTAL_TIMESTEPS = 1_000_000
+SEED = 0
 
-checkpoint_prefix = "quadx_checkpoints"
-
-
-env = gym.make("PyFlyt/QuadX-Waypoints-v4", render_mode="rgb_array")
-env = FlattenWaypointEnv(env, context_length=2)
-env = Monitor(env)
-
-video_trigger = lambda step: step % 2000 == 0
-env = TensorboardVideoRecorder(
-    env=env,
-    video_trigger=video_trigger,
-    video_length=2000,
-    fps=30,
-    record_video_env_idx=0,
-    tb_log_dir=experiment_logdir,
-)
-
-checkpoint_callback = CheckpointCallback(
-    save_freq=50_000,
-    save_path=checkpoint_dir,
-    name_prefix=checkpoint_prefix,
-)
+EXP_NAME = "cluster_run"
+CHKPT_DIR = f"./checkpoints/{EXP_NAME}/"
+VECENV_MON_DIR = f"./vecenv_monitor_dir/{EXP_NAME}/"
 
 def latest_checkpoint_path(ckpt_dir: str, prefix: str) -> str | None:
     if not os.path.isdir(ckpt_dir):
@@ -55,31 +40,73 @@ def latest_checkpoint_path(ckpt_dir: str, prefix: str) -> str | None:
                 best = os.path.join(ckpt_dir, f)
     return best
 
-load_path = latest_checkpoint_path(checkpoint_dir, checkpoint_prefix)
+def make_env():
+    env = gym.make("PyFlyt/QuadX-Waypoints-v4", render_mode="rgb_array")
+    env = FlattenWaypointEnv(env, context_length=2)
+    return env
 
-if load_path:
-    print(f"FOUND CHECKPOINT -- Resuming from {load_path}")
-    model = PPO.load(load_path, env=env)
-    reset_timesteps = False
-else:
-    print("No checkpoint found. Starting new training.")
-    model = PPO(
-        "MlpPolicy",
-        env,
-        verbose=1,
-        tensorboard_log=experiment_logdir,
-        n_steps=2048,
-        batch_size=64,
-        learning_rate=3e-4,
+if __name__ == "__main__":
+
+    # config
+    run_id = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+    experiment_logdir = f"quadKWPter_logs/{EXP_NAME}/{run_id}"
+
+    os.makedirs(CHKPT_DIR, exist_ok=True)
+    os.makedirs(VECENV_MON_DIR, exist_ok=True)
+
+    checkpoint_prefix = "quadx_checkpoints"
+
+    env = make_vec_env(make_env, n_envs=NUM_ENVS,
+                       seed=SEED,
+                       monitor_dir=VECENV_MON_DIR,
+                       vec_env_cls=SubprocVecEnv
+                       )
+
+    env = VecFrameStack(env, n_stack=4)
+
+    video_trigger = lambda step: step % 2000 == 0
+    env = TensorboardVideoRecorder(
+        env=env,
+        video_trigger=video_trigger,
+        video_length=VID_LEN,
+        fps=FPS,
+        record_video_env_idx=0,
+        tb_log_dir=experiment_logdir,
     )
-    reset_timesteps = True
 
-model.learn(
-    total_timesteps=1_000_000,
-    tb_log_name="quadx_waypoints",
-    callback=checkpoint_callback,
-    reset_num_timesteps=reset_timesteps,
-)
+    env = VecNormalize(env, norm_obs=True, norm_reward=True, clip_obs=10.)
 
-model.save("quadx_waypoints_gpu")
-env.close()
+    checkpoint_callback = CheckpointCallback(
+        save_freq=50_000 // NUM_ENVS,
+        save_path=CHKPT_DIR,
+        name_prefix=checkpoint_prefix,
+    )
+
+    load_path = latest_checkpoint_path(CHKPT_DIR, checkpoint_prefix)
+
+    if load_path:
+        print(f"FOUND CHECKPOINT -- Resuming from {load_path}")
+        model = PPO.load(load_path, env=env)
+        reset_timesteps = False
+    else:
+        print("No checkpoint found. Starting new training.")
+        model = PPO(
+            "MlpPolicy",
+            env,
+            verbose=1,
+            tensorboard_log=experiment_logdir,
+            n_steps=2048,
+            batch_size=64,
+            learning_rate=3e-4,
+        )
+        reset_timesteps = True
+
+    model.learn(
+        total_timesteps=TOTAL_TIMESTEPS,
+        tb_log_name="quadx_waypoints",
+        callback=checkpoint_callback,
+        reset_num_timesteps=reset_timesteps,
+    )
+
+    model.save("quadx_waypoints_gpu")
+    env.close()
