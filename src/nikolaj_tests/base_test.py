@@ -3,6 +3,8 @@ import re
 import gymnasium as gym
 import PyFlyt.gym_envs  # registers envs
 from PyFlyt.gym_envs import FlattenWaypointEnv
+import imageio_ffmpeg
+os.environ["IMAGEIO_FFMPEG_EXE"] = imageio_ffmpeg.get_ffmpeg_exe()
 
 from stable_baselines3 import PPO
 from stable_baselines3.common.monitor import Monitor
@@ -21,7 +23,7 @@ FPS = 30
 TOTAL_TIMESTEPS = 1_000_000
 SEED = 0
 
-EXP_NAME = "cluster_run"
+EXP_NAME = "cluster_run_parallelized_v2_fewer_steps_before_update_bigger_batch_size"
 CHKPT_DIR = f"./checkpoints/{EXP_NAME}/"
 VECENV_MON_DIR = f"./vecenv_monitor_dir/{EXP_NAME}/"
 
@@ -42,6 +44,7 @@ def latest_checkpoint_path(ckpt_dir: str, prefix: str) -> str | None:
 
 def make_env():
     env = gym.make("PyFlyt/QuadX-Waypoints-v4", render_mode="rgb_array")
+    # env = gym.make("PyFlyt/QuadX-Waypoints-v4", render_mode=None)
     env = FlattenWaypointEnv(env, context_length=2)
     return env
 
@@ -95,8 +98,8 @@ if __name__ == "__main__":
             env,
             verbose=1,
             tensorboard_log=experiment_logdir,
-            n_steps=2048,
-            batch_size=64,
+            n_steps=2048 // NUM_ENVS,
+            batch_size=256,
             learning_rate=3e-4,
         )
         reset_timesteps = True

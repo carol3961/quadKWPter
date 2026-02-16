@@ -9,7 +9,9 @@
 #SBATCH --output=sbatch_logs/slurm-%j.out   # Save standard output to logs/ folder
 #SBATCH --error=sbatch_logs/slurm-%j.err    # Save standard error to logs/ folder (optional)
 
-module load ffmpeg # necessary for saving gifs to tensorboard on HPC3
+pip install imageio-ffmpeg
+
+# module load ffmpeg # necessary for saving gifs to tensorboard on HPC3
 module load xvfb                 # Try loading this module if available
 
 # The Critical Fix: Wrap python in xvfb-run
