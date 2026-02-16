@@ -3,6 +3,7 @@ import re
 import gymnasium as gym
 import PyFlyt.gym_envs  # registers envs
 from PyFlyt.gym_envs import FlattenWaypointEnv
+from quadx_forest_env import QuadXForestEnv
 import imageio_ffmpeg
 os.environ["IMAGEIO_FFMPEG_EXE"] = imageio_ffmpeg.get_ffmpeg_exe()
 
@@ -43,8 +44,17 @@ def latest_checkpoint_path(ckpt_dir: str, prefix: str) -> str | None:
     return best
 
 def make_env():
-    env = gym.make("PyFlyt/QuadX-Waypoints-v4", render_mode="rgb_array")
+    #env = gym.make("PyFlyt/QuadX-Waypoints-v4", render_mode="rgb_array")
     # env = gym.make("PyFlyt/QuadX-Waypoints-v4", render_mode=None)
+    env = QuadXForestEnv(
+        num_trees=5,
+        num_targets=1,
+        num_sensors=8,
+        sensor_range=5.0,
+        max_duration_seconds=30.0,
+        flight_dome_size=12.0,
+        render_mode="rgb_array"
+    )
     env = FlattenWaypointEnv(env, context_length=2)
     return env
 
