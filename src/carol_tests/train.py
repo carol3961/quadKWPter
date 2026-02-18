@@ -6,9 +6,9 @@ from stable_baselines3 import PPO
 # create vectorized environment for training
 def make_env():
     env = QuadXForestEnv(
-        num_trees=5,
+        num_trees=15,
         num_targets=1,
-        num_sensors=8,
+        num_sensors=16,
         sensor_range=5.0,
         max_duration_seconds=30.0,
         flight_dome_size=12.0
@@ -30,7 +30,7 @@ model = PPO(
     gamma=0.99
 )
 
-model.learn(total_timesteps=100_000, tb_log_name="quadx_waypoints")
+model.learn(total_timesteps=500_000, tb_log_name="quadx_waypoints")
 model.save("quadx_waypoints")
 env.close()
 

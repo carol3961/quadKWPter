@@ -4,9 +4,9 @@ from stable_baselines3 import PPO
 
 env = QuadXForestEnv(
     render_mode="human",
-    num_trees=5,
+    num_trees=15,
     num_targets=1,
-    num_sensors=8,
+    num_sensors=16,
     sensor_range=5.0
 )
 env = FlattenWaypointEnv(env, context_length=1)

@@ -196,7 +196,8 @@ class QuadXForestEnv(QuadXWaypointsEnv):
         
         # strong progress reward/penalty
         progress = self.previous_distance - current_distance
-        self.reward += 20.0 * progress
+        #self.reward += 20.0 * progress
+        self.reward += 5.0 * np.clip(progress, -0.5, 0.5)
         self.previous_distance = current_distance
         
         # strong proximity reward
@@ -337,6 +338,3 @@ class QuadXForestEnv(QuadXWaypointsEnv):
             })    
             
         attempts += 1
-
-            
-            
