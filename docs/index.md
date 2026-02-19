@@ -7,7 +7,7 @@ Source code: https://carol3961.github.io/quadKWPter
 ## Project Outline
 Our project involves training an autonomous drone to fly through a simulated forest environment from a starting point to a destination point without colliding into obstacles. We will accomplish this by using mesh models to represent realistic trees, LiDAR to detect collision objects as the drone flies, tuning the reward function to be compatible with our forest environment, and the PPO reinforcement learning algorithm to train our drone.
 
-![Photo of drone in forest environment](images/index_drone.png)
+![Photo of drone in forest environment](images/index_drone.png){: style="width:700px; height:400px;"}
 
 Reports:
 
