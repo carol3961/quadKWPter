@@ -16,6 +16,7 @@ To train our drone, we are using the PPO implementation from stable-baselines3, 
 * Batch size = 64
 * Number of epochs = 10
 * Discount factor = 0.99
+
 We are currently training for 500,000 timesteps using make_vec_env for a vectorized and parallel training environment.
 
 ### Waypoint and tree generation
@@ -35,9 +36,18 @@ The reward relies on multiple components to encourage fast navigation while avoi
 
 ## Evaluation
 
+### Quantitative metrics
+Fill in...
+
+### Qualitative metrics
+We are visualizing our drone train using the render_mode=”human” argument in our custom class inherited from QuadXWaypoints which allows us to see the drone learning to fly through the forest environment. Because we are training our drone in a relatively sparse forest environment currently, we observe that the drone is often flying the same pattern in its route to get to the waypoint, regardless of if there’s a tree in its way or not. Since the tree placement is sparse, the drone usually gets lucky and there isn’t a tree in its way and it quickly navigates to the waypoint, but once we start training our drone in more dense forest environments we expect to encounter more issues with navigation and will need to modify the reward function, the hyperparameters, and train for more episodes.
+
 ## Remaining Goals and Challenges 
 
-## Resrouces Used
+For the remainder of the quarter we hope to make our forest environment more robust to allow the drone to learn to fly through more complicated and realistic forest scenarios. After increasing the density of trees, we anticipate having to tune our hyperparameters for PPO, refine the reward function, and train for longer episodes as the environment will be a lot more complex. We anticipate tuning the reward function to be an obstacle as we don’t want our agent to learn to maximize rewards by avoiding the intended behavior. For example, an issue we already noticed was that the drone was learning to fly above the trees to navigate to the target, which defeats the purpose of detecting and avoiding trees. To combat this we issued a penalty for when the drone flies too high above the target which helped correct its behavior. When we introduce a more complex forest environment we anticipate the drone to learn other shortcuts that are not conducive to real learning and we will have to adjust our implementation accordingly.
+
+## Resouces Used
+* We are using AI chatbots to help debug our code
 * [PyFlyt source code](https://github.com/jjshoots/PyFlyt)
 * [Oak tree mesh model](https://github.com/osrf/gazebo_models/tree/master)
 * [“Comparative Analysis of DQN and PPO Algorithms in UAV Obstacle Avoidance 2D Simulation” paper](https://ceur-ws.org/Vol-3688/paper25.pdf)
