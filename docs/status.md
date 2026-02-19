@@ -9,7 +9,7 @@ Our project involves training an autonomous drone to fly through a simulated for
 
 ## Approach
 
-### Algorithm
+### RL algorithm
 To train our drone, we are using the PPO implementation from stable-baselines3, a reinforcement learning algorithm that collects information from the environment during each iteration to update the policy. By optimizing a clipped surrogate objective function, PPO constrains how much the policy changes during training, making it a stable algorithm. We chose to use PPO for the purposes of drone navigation training because it generally outperforms other algorithms like DQN in navigating complex environments and prioritizes cautious policy updates according to the paper “Comparative Analysis of DQN and PPO Algorithms in UAV Obstacle Avoidance 2D Simulation.” The notable hyperparameters we are using for training are:
 * Learning rate = 3e-4
 * Rollout step size = 2048
@@ -46,7 +46,7 @@ We are visualizing our drone train using the render_mode=”human” argument in
 
 For the remainder of the quarter we hope to make our forest environment more robust to allow the drone to learn to fly through more complicated and realistic forest scenarios. After increasing the density of trees, we anticipate having to tune our hyperparameters for PPO, refine the reward function, and train for longer episodes as the environment will be a lot more complex. We anticipate tuning the reward function to be an obstacle as we don’t want our agent to learn to maximize rewards by avoiding the intended behavior. For example, an issue we already noticed was that the drone was learning to fly above the trees to navigate to the target, which defeats the purpose of detecting and avoiding trees. To combat this we issued a penalty for when the drone flies too high above the target which helped correct its behavior. When we introduce a more complex forest environment we anticipate the drone to learn other shortcuts that are not conducive to real learning and we will have to adjust our implementation accordingly.
 
-## Resouces Used
+## Resources Used
 * We are using AI chatbots to help debug our code
 * [PyFlyt source code](https://github.com/jjshoots/PyFlyt)
 * [Oak tree mesh model](https://github.com/osrf/gazebo_models/tree/master)
