@@ -5,6 +5,7 @@ import PyFlyt.gym_envs  # registers envs
 from PyFlyt.gym_envs import FlattenWaypointEnv
 from quadx_forest_env import QuadXForestEnv
 import imageio_ffmpeg
+from stable_baselines3.common.logger import configure
 os.environ["IMAGEIO_FFMPEG_EXE"] = imageio_ffmpeg.get_ffmpeg_exe()
 
 from stable_baselines3 import PPO
@@ -121,5 +122,6 @@ if __name__ == "__main__":
         reset_num_timesteps=reset_timesteps,
     )
 
-    model.save("quadx_waypoints_gpu")
+    model.save("quadx_waypoints_cpu")
+    env.save(os.path.join(CHKPT_DIR, "vec_normalize.pkl"))
     env.close()

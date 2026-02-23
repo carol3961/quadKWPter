@@ -11,9 +11,10 @@ def make_env():
         num_sensors=8,
         sensor_range=5.0,
         max_duration_seconds=30.0,
-        flight_dome_size=12.0
+        flight_dome_size=12.0,
+        render_mode="rgb_array"
     )
-    env = FlattenWaypointEnv(env, context_length=1)
+    env = FlattenWaypointEnv(env, context_length=2)
     return env
 
 env = make_vec_env(make_env, n_envs=4)  # 4 parallel environments
@@ -35,5 +36,5 @@ model.save("quadx_waypoints")
 env.close()
 
 # tensorboard --logdir tb_logs
-# type this ^ once ur model is done learning. itll open a local server u can view in ur browser. 
+# type this ^ once ur model is done learning. itll open a local server u can view in ur browser.
 # need to pip install tensorflow for this to work
