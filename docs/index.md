@@ -20,6 +20,7 @@ Reports:
 * [PyFlyt source code](https://github.com/jjshoots/PyFlyt)
 * [Oak tree mesh model](https://github.com/osrf/gazebo_models/tree/master)
 * [“Comparative Analysis of DQN and PPO Algorithms in UAV Obstacle Avoidance 2D Simulation” paper](https://ceur-ws.org/Vol-3688/paper25.pdf)
+* ["Learning to Fly—a Gym Environment with PyBullet Physics for Reinforcement Learning of Multi-agent Quadcopter Control"](https://arxiv.org/pdf/2103.02142)
 
 
 
