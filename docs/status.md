@@ -73,7 +73,7 @@ The above image shows that the frames per second are wildly different between ru
 We are visualizing our drone train using the render_mode=”human” argument in our custom class inherited from QuadXWaypoints which allows us to see the drone learning to fly through the forest environment. Because we are training our drone in a relatively sparse forest environment currently, we observe that the drone is often flying the same pattern in its route to get to the waypoint, regardless of if there’s a tree in its way or not. Since the tree placement is sparse, the drone usually gets lucky and there isn’t a tree in its way and it quickly navigates to the waypoint, but once we start training our drone in more dense forest environments we expect to encounter more issues with navigation and will need to modify the reward function, the hyperparameters, and train for more episodes.
 
 <video width="320" height="240" controls>
-  <source src="rollout.mp4" type="video/mp4">
+  <source src="images/rollout.mp4" type="video/mp4">
   Your browser does not support the video tag.
 </video>
 
