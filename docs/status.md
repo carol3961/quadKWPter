@@ -22,18 +22,18 @@ The notable hyperparameters we are using for training are:
 
 We are currently training for 1,000,000 timesteps using make_vec_env for a vectorized and parallel training environment.
 
-![](./images/ep_rew_mean_5_trees.png)
-![](./images/ep_len_mean_5_trees.png)
-![](./images/fps_5_trees.png)
+![](./images/ep_rew_mean_5_trees.png){width=50%}
+![](./images/ep_len_mean_5_trees.png){width=50%}
+![](./images/fps_5_trees.png){width=50%}
 
-These graphs show how our training is significantly faster when we increased to 8 parallel environments.
+These graphs show how our training time goes down from ~2 hours to ~0.5 hours just from running 8 parallel environments.
 
 ### Waypoint and tree generation
 To configure our environment, we are inheriting from PyFlyt’s QuadXWaypointsEnv class and extending it to include our forest environment, where the QuadXWaypointsEnv class already provides functionality for the drone flying towards waypoints using the PyBullet engine. We modified the waypoint generation process to have a single waypoint spawn at a random coordinate location sampled from a specified goal region. To add trees into this environment, we used oak tree mesh models from osrf’s open-source GitHub repository for visual realism. However, for simplicity, we used cylinders as the collision shape for the trees so that we neglect the presence of leaves in our trees. The number of trees randomly spawned into the environment is configurable by a parameter that the user can change, however for our preliminary training we chose to use small numbers like 5 and 10 trees.
 
 Moving from no trees to 5 trees significantly affected our drone's ability to find a successful policy. After 1 million steps, the 5 tree environment appears to converge to a lower average reward than when there were no trees present. We need to work on our reward functions or hyperparameter tuning to improve the stability and accuracy of the 5 tree environment.
 
-![](./images/compare_5_to_no_trees.png)
+![](./images/compare_5_to_no_trees.png){width=50%}
 
 ### State and action space
 We then modified the state space to include the distance from the drone to any surrounding obstacles, which we calculate by projecting rays from the drone’s body to detect obstacles within a certain radius. This is in addition to the attitude state (measurements related to velocity, orientation, auxiliary sensor data, etc.) and target deltas (drone’s relative position to waypoints) that are already provided in the QuadXWaypointsEnv class. We did not modify the action space, which currently consists of continuous values for roll rate, pitch rate, yaw rate, and thrust.
