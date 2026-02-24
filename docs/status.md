@@ -89,7 +89,7 @@ We are visualizing our drone train using the render_mode=”human” argument in
 </video>
 This video shows a version of our policy that uses the mesh trees with a single waypoint. Since the trees rendered outside the path of the drone, it does not encounter any obstacles and moves quickly and effectively towards the waypoint, achieving its goal of reaching it.
 
-<iframe src="https://drive.google.com/file/d/FILE_ID/preview"
+<iframe src="https://drive.google.com/file/d/17smqy9Ppoc2DzdVCgPO5hhhXd5vRecx9/preview"
         width="320"
         height="240"
         allow="autoplay">
