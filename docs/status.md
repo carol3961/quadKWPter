@@ -14,7 +14,7 @@ To train our drone, we are using the PPO implementation from stable-baselines3, 
 
 For our project, we use the stablebaselines3 Multi-Layer Perceptron (MLP) Policy. We are sticking with this standard policy because we pass in a low-dimensional numeric observation - a fixed 8 dimension vector containing LiDAR observations from our environment. We thought the drone would learn faster with LiDAR as opposed to noisier image observations. This LiDAR is simulated as a ray-cast around the drone: the environment calculates the distance between the drone and environment objects in 8 evenly-spaced directions, these values are then passed into the PPO model.
 
-We run 8 parallel environments to accelerate our training. We initially reduced the step size to keep the batch updates consistent in steps, since our simpler experiments converged faster with smaller steps sizes. However, when running it again on the more complex experiments (with trees) we realized we should go back to larger step sizes to maintain stability. We also increased the batch size from 64 to 256 so the learner has more stable policy updates.
+We run 8 parallel environments to accelerate our training. We initially reduced the step size to keep the batch updates consistent in steps, since our simpler experiments converged faster with smaller steps sizes. However, when running it again on the more complex experiments (with trees) we realized we should go back to larger step sizes to maintain stability. We also increased the batch size from 64 to 256 to stabilize our policy updates.
 
 The notable hyperparameters we are using for training are:
 * Parallel Environments = 8
@@ -23,6 +23,7 @@ The notable hyperparameters we are using for training are:
 * Batch size = 256
 * Number of epochs = 10
 * Discount factor = 0.99
+Most, except batch size, are default parameters as described in the [stable-baselines3 doumentation](https://stable-baselines3.readthedocs.io/en/master/modules/ppo.html). We experimented with different configurations and decided to increase batch size to stabilize updates and improve performance, as seen in the Quantitative Metrics section below. We plan to integrate Weights and Biases to continue experimenting with different configurations going forward, in a more standardized way.
 
 We are currently training for 1,000,000 timesteps using make_vec_env for a vectorized and parallel training environment.
 
@@ -40,7 +41,7 @@ To configure our environment, we are inheriting from PyFlyt’s QuadXWaypointsEn
 
 Moving from no trees to 5 trees significantly affected our drone's ability to find a successful policy. After 1 million steps, the 5 tree environment appears to converge to a lower average reward than when there were no trees present. This is reflected when we run the model file, and we see that the drone often flies directly into the trees and the episode ends. However, because the trees spawn in random locations sometimes it luckily avoids the trees.
 
-We need to work on our reward functions or hyperparameter tuning to improve the stability and accuracy of the tree environment, so that the drone learns to avoid the trees instead of accepinting a lower reward ceiling.
+We need to work on our reward functions or hyperparameter tuning to improve the stability and accuracy of the tree environment, so that the drone learns to avoid the trees instead of accepting a lower reward ceiling.
 
 <img src="./images/episode_comps.png" width="50%" />
 
@@ -80,13 +81,27 @@ We are visualizing our drone train using the render_mode=”human” argument in
   <source src="images/rollout.mp4" type="video/mp4">
   Your browser does not support the video tag.
 </video>
+This video shows a version of our policy that uses the mesh trees with a single waypoint. Since the trees rendered outside the path of the drone, it does not encounter any obstacles and moves quickly and effectively towards the waypoint, achieving its goal of reaching it.
 
 ## Remaining Goals and Challenges
 
-For the remainder of the quarter we hope to make our forest environment more robust to allow the drone to learn to fly through more complicated and realistic forest scenarios. After increasing the density of trees, we anticipate having to tune our hyperparameters for PPO, refine the reward function, and train for longer episodes as the environment will be a lot more complex. We anticipate tuning the reward function to be an obstacle as we don’t want our agent to learn to maximize rewards by avoiding the intended behavior. For example, an issue we already noticed was that the drone was learning to fly above the trees to navigate to the target, which defeats the purpose of detecting and avoiding trees. To combat this we issued a penalty for when the drone flies too high above the target which helped correct its behavior. When we introduce a more complex forest environment we anticipate the drone to learn other shortcuts that are not conducive to real learning and we will have to adjust our implementation accordingly.
+For the remainder of the quarter we hope to make our forest environment more robust to allow the drone to learn to fly through more complicated and realistic forest scenarios. After increasing the density of trees and incorporating the mesh trees into our main training loop, we anticipate having to tune our hyperparameters for PPO, refine the reward function, and train for longer episodes as the environment will be a lot more complex. We anticipate tuning the reward function to be an obstacle as we don’t want our agent to learn to maximize rewards by avoiding intended behavior. For example, an issue we already noticed was that the drone was learning to fly above the trees to navigate to the target, which defeats the purpose of detecting and avoiding trees. To combat this we issued a penalty for when the drone flies too high above the target which helped correct its behavior. When we introduce a more complex forest environment we anticipate the drone to learn other shortcuts that are not conducive to real learning and we will have to adjust our implementation accordingly.
+To standardize our experiment tracking going forward, we want to incorporate Weights and Biases to track hyperparameter settings, as we learned different configurations can have substantial impacts on the performance of our drone.
+
+Challenges we are anticipating include smooth integration of different development branches, as this has been an issue already. Sometimes we develop diverging branches with difficult merges, resulting in time-consuming rework of existing implementations. We also anticipate adding wind to be a challenge, since we are already encountering difficulties with tuning rewards to have our drone to effectively navigate through randomly-generated trees. Tracking all the changes between experiments will also be a challenge, which is why we look to more standardized tools.
+
 
 ## Resources Used
-* We are using AI chatbots to help debug our code
+* We are utilizing an existing library, PyFlyt, to build off of. They have existing implementations of drone RL controls and waypoint navigation. We inherited this waypoints environment to develop our forest environment, which is what we use for our reward shaping, simulated LiDAR observations, and tree integration. We chose to use PyFlyt because of a paper we read (Panerati et. al.) that compared it to other existing drone environments, where it had notable advantages such as realisitc collision effects and existing RL support. We also used a handful of ML sites and Youtube videos to understand hyperparameters & RL concepts.
 * [PyFlyt source code](https://github.com/jjshoots/PyFlyt)
 * [Oak tree mesh model](https://github.com/osrf/gazebo_models/tree/master)
 * [“Comparative Analysis of DQN and PPO Algorithms in UAV Obstacle Avoidance 2D Simulation” paper](https://ceur-ws.org/Vol-3688/paper25.pdf)
+* [ "Learning to Fly—a Gym Environment with PyBullet Physics for Reinforcement Learning of Multi-agent Quadcopter Control"](https://arxiv.org/pdf/2103.02142)
+* AI Tool Usage:
+    * Claude / ChatGPT
+        * Debugging
+        * Concept summaries & pointing us to resources to investigate further
+        * Discussing implementation approaches & improvements
+    * Gemini
+        * Finding resources to investigate topics or problem solutions further
+
