@@ -12,27 +12,27 @@ from quadx_forest_env import QuadXForestEnv
 # CONFIG
 # =========================
 NUM_ENVS = 8
-TOTAL_TIMESTEPS = 40_000
-
-EXP_NAME = "forest_obstacle_test"
+NUM_TREES = 5
+TOTAL_TIMESTEPS = 500_000
+N_STEPS = 2048
+BATCH_SIZE = 1024
+LEARNING_RATE = 1e-4
+N_EPOCHS = 10
+GAMMA = 0.99
+ENT_COEF = 0.1
 
 # If True: resumes the most recent run_N (keeps training inside that same run folder).
 # If False: starts a brand new run_(N+1) folder (unless forking, see below).
 RESUME_LATEST_RUN = False
-
-# Checkpoint save interval in *environment* steps (across all envs combined).
-CHECKPOINT_SAVE_FREQ = 10_000
-
-# Must match train/eval/visualize wrappers
-N_STACK = 4
+EXP_NAME = "forest_obstacle_avoidance_v5"
+CHECKPOINT_SAVE_FREQ = 50_000
+N_STACK = 2
 
 # -------- Forking / branching settings --------
 # If START_FROM_RUN is not None, we will create a NEW run_N directory and initialize it from
 # a checkpoint in START_FROM_RUN (optionally at START_FROM_STEPS).
-START_FROM_RUN = "run_4"          # e.g. "run_1" or None
-START_FROM_STEPS = None        # e.g. 100000 (int) or None -> uses latest checkpoint in START_FROM_RUN
-
-# If True, copies the source vecnormalize.pkl into the new run folder for self-contained runs.
+START_FROM_RUN = "run_2"          # e.g. "run_1" or None
+START_FROM_STEPS =  1000000       # e.g. 100000 (int) or None -> uses latest checkpoint in START_FROM_RUN
 COPY_VECNORM_ON_FORK = True
 
 # =========================
@@ -82,7 +82,7 @@ def checkpoint_path_for_steps(run_dir: str, steps: int, prefix: str = "checkpoin
 def make_env():
     env = QuadXForestEnv(
         render_mode=None,
-        num_trees=0,
+        num_trees=NUM_TREES,
         num_targets=1,
         num_sensors=8,
         sensor_range=5.0,
@@ -201,11 +201,12 @@ if __name__ == "__main__":
                 env,
                 verbose=0,
                 tensorboard_log=log_dir,
-                n_steps=2048 // NUM_ENVS,
-                batch_size=256,
-                learning_rate=3e-4,
-                n_epochs=10,
-                gamma=0.99
+                n_steps=N_STEPS,
+                batch_size=BATCH_SIZE,
+                learning_rate=LEARNING_RATE,
+                n_epochs=N_EPOCHS,
+                gamma=GAMMA,
+                ent_coef=ENT_COEF
             )
             reset_timesteps = True
 

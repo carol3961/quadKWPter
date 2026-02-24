@@ -4,19 +4,20 @@ from stable_baselines3 import PPO
 from stable_baselines3.common.vec_env import DummyVecEnv, VecFrameStack, VecNormalize
 from PyFlyt.gym_envs import FlattenWaypointEnv
 from quadx_forest_env import QuadXForestEnv
+from train import NUM_TREES, N_STACK, EXP_NAME
 
 # =========================
 # CONFIG
 # =========================
-EXP_NAME = "forest_obstacle_test"
-RUN_ID = "run_1"  # <-- change to run_2, run_3, etc.
+EXP_NAME = EXP_NAME
+RUN_ID = "run_3"  # <-- change to run_2, run_3, etc.
 
-NUM_TREES = 0          # match what you want to visualize
+NUM_TREES = NUM_TREES         
 NUM_TARGETS = 1
 NUM_SENSORS = 8
 SENSOR_RANGE = 5.0
 CONTEXT_LENGTH = 1
-N_STACK = 4            # MUST match training
+N_STACK = N_STACK      
 
 # =========================
 # Helpers

@@ -41,7 +41,8 @@ class QuadXForestEnv(QuadXWaypointsEnv):
         self.tree_height_range = tree_height_range
         self.tree_collision_penalty = tree_collision_penalty
         self.tree_proximity_penalty_weight = tree_proximity_penalty_weight
-        self.time_step_penalty = time_step_penalty  # NEW
+        self.time_step_penalty = time_step_penalty
+        self.goal_reach_distance = goal_reach_distance
         
         # Sensor configuration
         self.num_sensors = num_sensors
@@ -180,58 +181,37 @@ class QuadXForestEnv(QuadXWaypointsEnv):
         
         return distances
     
-    def compute_term_trunc_reward(self) -> None:
-        """Compute reward with stronger goal-seeking incentive"""
-        
-        # Call parent for base termination/reward
-        super().compute_term_trunc_reward()
-        
-        # Check if targets still exist (might be empty after reaching goal)
-        if len(self.waypoints.targets) == 0:
-            return  # Episode is ending, skip distance calculations
-        
-        # Get current distance to goal
-        ang_vel, ang_pos, lin_vel, lin_pos, quaternion = self.compute_attitude()
-        goal_pos = self.waypoints.targets[0]
-        current_distance = np.linalg.norm(lin_pos - goal_pos)
-        
-        # Track previous distance for progress reward
-        if not hasattr(self, 'previous_distance'):
-            self.previous_distance = current_distance
-        
-        # STRONG progress reward/penalty
-        progress = self.previous_distance - current_distance
-        self.reward += 20.0 * progress
-        self.previous_distance = current_distance
-        
-        # Strong proximity reward
-        self.reward += 1.0 / (current_distance + 0.1)
-        
-        # Time penalty
-        self.reward -= self.time_step_penalty
-        
-        # PENALTY for going too high
-        goal_height = goal_pos[2]
-        current_height = lin_pos[2]
-        if current_height > goal_height + 2.0:
-            height_penalty = (current_height - goal_height - 2.0) * 0.5
-            self.reward -= height_penalty
-        
-        # Tree collision
-        if self._check_tree_collision():
-            self.reward = -self.tree_collision_penalty
-            self.termination = True
-            self.info["tree_collision"] = True
-            return
-        
-        # Proximity penalty
-        if not self.sparse_reward:
-            obstacle_distances = self.state.get("obstacle_distances", None)
-            if obstacle_distances is not None:
-                min_distance = np.min(obstacle_distances)
-                if min_distance < 1.5:
-                    proximity_penalty = self.tree_proximity_penalty_weight * (1.5 - min_distance)
-                    self.reward -= proximity_penalty
+    def compute_state_reward(self):
+        # --- Progress toward goal ---
+        current_dist = np.linalg.norm(
+            self.env.state(0)[-1][:3] - self.targets[self.current_target_index]
+        )
+        progress = self.previous_distance - current_dist
+        self.previous_distance = current_dist
+        progress_reward = 5.0 * progress
+
+        # --- Survival (encourages staying alive → encourages dodging) ---
+        survival_reward = 0.5
+
+        # --- Obstacle proximity (exponential) ---
+        obstacle_penalty = 0.0
+        danger_radius = 3.0
+        if hasattr(self, "obstacle_distances"):
+            min_dist = np.min(self.obstacle_distances)
+            if min_dist < danger_radius:
+                normalized = min_dist / danger_radius
+                obstacle_penalty = -3.0 * (1.0 - normalized) ** 2
+                # At distance 0.5 → penalty = -1.9
+                # At distance 1.0 → penalty = -1.3
+                # At distance 2.0 → penalty = -0.3
+
+        # --- Collision (devastating) ---
+        collision_penalty = 0.0
+        if self.env.contact_array[0]:  # however you detect tree collision
+            collision_penalty = -100.0
+
+        total = progress_reward + survival_reward + obstacle_penalty + collision_penalty
+        return total
     
     def _check_tree_collision(self) -> bool:
         """Check if drone has collided with any tree"""
