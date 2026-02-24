@@ -25,17 +25,8 @@ We are currently training for 1,000,000 timesteps using make_vec_env for a vecto
 For an environment with 5 trees, below are comparisons of different combinations of hyperparameters:
 
 <img src="./images/ep_rew_mean_5_trees_big_steps2.png" width="50%" >
-
-The above image shows that the agent learns faster with lower step sizes (2048 distributed across N envs) compared to 2048 per environment. However, the policy updates with smaller step sizes are more noisy and volatile. It also shows that using 1 vs 8 environments has less of an impact on the ultimate success of the drone compared to the batch size. Environment quantity mainly affected training time. The small batch size runs converge faster and on a lower value: we think the variance of the updates prevents them from understanding what is actually useful data versus noise.
-
-
 <img src="./images/ep_len_mean_len_var.png" width="50%" >
-
-The above image shows that the length of the episodes are slowly decreasing over time. This may be because the agents are beginning to be more confident in their actions, and are learning to reach the goal faster. Since it's an average, episodes could also be ending sooner because the drone may crash more often if it becomes overconfident in a wrong policy.
-
 <img src="./images/fps_len_mean_5_trees_big_steps.png" width="50%" >
-
-The above image shows that the frames per second are wildly different between runs with 1 vs 8 environments. More frames per second means faster data collection and the possibility to run more experiments in a shorter timeframe.
 
 These graphs show how our training time goes down from ~2 hours to ~0.5 hours just from running 8 parallel environments.
 
@@ -63,7 +54,14 @@ The reward relies on multiple components to encourage fast navigation while avoi
 ## Evaluation
 
 ### Quantitative metrics
-Fill in...
+<img src="./images/ep_rew_mean_5_trees_big_steps2.png" width="50%" >
+
+We are assessing our drone’s performance qualitatively using the graphs for mean episode reward (ep_rew_mean) and mean episode length (ep_len_mean). The ep_rew_mean graph shows an upwards trend, which is a good sign as it means our drone is getting better at navigating to the target waypoint at a faster speed, as we currently assign rewards depending on how close the drone is to the target and we penalize the drone for each timestep it takes to reach the goal. As the reward values are generally increasing, it means our drone is making meaningful progress in its learning task. 
+
+<img src="./images/ep_len_mean_len_var.png" width="50%" >
+
+Our graph for ep_len_mean shows a downward trend which is a positive for our setup as this indicates that our drone is learning to stay airborne longer without crashing into obstacles, as colliding into a tree would immediately terminate the episode. The decreasing episode length combined with the increasing reward function provides reasonable evidence that our drone is learning to navigate to its goal location faster, rather than other explanations such as the drone immediately crashing into a tree (which would also lead to shorter episodes). This is good progress since we want our drone to not be afraid to explore and learn the forest environment, however we also do not want the drone to fly aimlessly for an excessive amount of time so we need to find a balance between exploration of the environment and efficiency in reaching the target waypoint. 
+
 
 ### Qualitative metrics
 We are visualizing our drone train using the render_mode=”human” argument in our custom class inherited from QuadXWaypoints which allows us to see the drone learning to fly through the forest environment. Because we are training our drone in a relatively sparse forest environment currently, we observe that the drone is often flying the same pattern in its route to get to the waypoint, regardless of if there’s a tree in its way or not. Since the tree placement is sparse, the drone usually gets lucky and there isn’t a tree in its way and it quickly navigates to the waypoint, but once we start training our drone in more dense forest environments we expect to encounter more issues with navigation and will need to modify the reward function, the hyperparameters, and train for more episodes.
