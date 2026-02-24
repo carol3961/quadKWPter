@@ -64,7 +64,7 @@ The above image shows that the agent learns faster with lower step sizes (2048 d
 
 Our graph for ep_len_mean shows a downward trend which is a positive for our setup as this indicates that our drone is learning to stay airborne longer without crashing into obstacles as colliding into a tree would immediately terminate the episode. The decreasing episode length combined with the increasing reward function provides reasonable evidence that our drone is learning to navigate to its goal location faster, rather than other explanations such as the drone immediately crashing into a tree (which would also lead to shorter episodes). This is good progress since we want our drone to not be afraid to explore and learn the forest environment, however we also do not want the drone to fly aimlessly for an excessive amount of time so we need to find a balance between exploration of the environment and efficiency in reaching the target waypoint.
 
-<img src="./images/fps_len_mean_5_trees_big_steps.png" width="50%" >
+<img src="./images/fps_5_trees_big_steps.png" width="50%" >
 
 The above image shows that the frames per second are wildly different between runs with 1 vs 8 environments. More frames per second means faster data collection and the possibility to run more experiments in a shorter timeframe.
 
