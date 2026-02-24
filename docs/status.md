@@ -22,17 +22,30 @@ The notable hyperparameters we are using for training are:
 
 We are currently training for 1,000,000 timesteps using make_vec_env for a vectorized and parallel training environment.
 
-For an environment with 5 trees, these are comparisons of different combinations of
+For an environment with 5 trees, below are comparisons of different combinations of hyperparameters:
+
 <img src="./images/ep_rew_mean_5_trees_big_steps2.png" width="50%" >
+
+The above image shows that the agent learns faster with lower step sizes (2048 distributed across N envs) compared to 2048 per environment. However, the policy updates with smaller step sizes are more noisy and volatile. It also shows that using 1 vs 8 environments has less of an impact on the ultimate success of the drone compared to the batch size. Environment quantity mainly affected training time. The small batch size runs converge faster and on a lower value: we think the variance of the updates prevents them from understanding what is actually useful data versus noise.
+
+
 <img src="./images/ep_len_mean_len_var.png" width="50%" >
+
+The above image shows that the length of the episodes are slowly decreasing over time. This may be because the agents are beginning to be more confident in their actions, and are learning to reach the goal faster. Since it's an average, episodes could also be ending sooner because the drone may crash more often if it becomes overconfident in a wrong policy.
+
 <img src="./images/fps_len_mean_5_trees_big_steps.png" width="50%" >
 
+The above image shows that the frames per second are wildly different between runs with 1 vs 8 environments. More frames per second means faster data collection and the possibility to run more experiments in a shorter timeframe.
+
 These graphs show how our training time goes down from ~2 hours to ~0.5 hours just from running 8 parallel environments.
+
 
 ### Waypoint and tree generation
 To configure our environment, we are inheriting from PyFlyt’s QuadXWaypointsEnv class and extending it to include our forest environment, where the QuadXWaypointsEnv class already provides functionality for the drone flying towards waypoints using the PyBullet engine. We modified the waypoint generation process to have a single waypoint spawn at a random coordinate location sampled from a specified goal region. To add trees into this environment, we used oak tree mesh models from osrf’s open-source GitHub repository for visual realism. However, for simplicity, we used cylinders as the collision shape for the trees so that we neglect the presence of leaves in our trees. The number of trees randomly spawned into the environment is configurable by a parameter that the user can change, however for our preliminary training we chose to use small numbers like 5 and 10 trees.
 
-Moving from no trees to 5 trees significantly affected our drone's ability to find a successful policy. After 1 million steps, the 5 tree environment appears to converge to a lower average reward than when there were no trees present. We need to work on our reward functions or hyperparameter tuning to improve the stability and accuracy of the 5 tree environment.
+Moving from no trees to 5 trees significantly affected our drone's ability to find a successful policy. After 1 million steps, the 5 tree environment appears to converge to a lower average reward than when there were no trees present. This is reflected when we run the model file, and we see that the drone often flies directly into the trees and the episode ends. However, because the trees spawn in random locations sometimes it luckily avoids the trees.
+
+We need to work on our reward functions or hyperparameter tuning to improve the stability and accuracy of the tree environment, so that the drone learns to avoid the trees instead of accepinting a lower reward ceiling.
 
 <img src="./images/episode_comps.png" width="50%" />
 
