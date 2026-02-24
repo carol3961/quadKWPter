@@ -22,9 +22,9 @@ The notable hyperparameters we are using for training are:
 
 We are currently training for 1,000,000 timesteps using make_vec_env for a vectorized and parallel training environment.
 
-![](./images/ep_rew_mean_5_trees.png){width=50%}
-![](./images/ep_len_mean_5_trees.png){width=50%}
-![](./images/fps_5_trees.png){width=50%}
+<img src="./images/ep_rew_mean_5_trees.png" width="50%" >
+<img src="./images/ep_len_mean_5_trees.png" width="50%" >
+<img src="./images/fps_5_trees.png" width="50%" >
 
 These graphs show how our training time goes down from ~2 hours to ~0.5 hours just from running 8 parallel environments.
 
@@ -33,7 +33,8 @@ To configure our environment, we are inheriting from PyFlyt’s QuadXWaypointsEn
 
 Moving from no trees to 5 trees significantly affected our drone's ability to find a successful policy. After 1 million steps, the 5 tree environment appears to converge to a lower average reward than when there were no trees present. We need to work on our reward functions or hyperparameter tuning to improve the stability and accuracy of the 5 tree environment.
 
-![](./images/compare_5_to_no_trees.png){width=50%}
+<img src="./images/compare_5_to_no_trees.png" width="50%" />
+
 
 ### State and action space
 We then modified the state space to include the distance from the drone to any surrounding obstacles, which we calculate by projecting rays from the drone’s body to detect obstacles within a certain radius. This is in addition to the attitude state (measurements related to velocity, orientation, auxiliary sensor data, etc.) and target deltas (drone’s relative position to waypoints) that are already provided in the QuadXWaypointsEnv class. We did not modify the action space, which currently consists of continuous values for roll rate, pitch rate, yaw rate, and thrust.
