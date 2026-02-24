@@ -3,7 +3,7 @@ layout: default
 title: Status
 ---
 
-<iframe width="1061" height="597" src="https://youtu.be/Hd_muOGjCrA" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>
+<iframe width="560" height="315" src="https://www.youtube.com/embed/Hd_muOGjCrA" title="Video" frameborder="0" allowfullscreen></iframe>
 
 ## Project Summary
 
