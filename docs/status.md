@@ -14,12 +14,12 @@ To train our drone, we are using the PPO implementation from stable-baselines3, 
 
 For our project, we use the stablebaselines3 Multi-Layer Perceptron (MLP) Policy. We are sticking with this standard policy because we pass in a low-dimensional numeric observation - a fixed 8 dimension vector containing LiDAR observations from our environment. We thought the drone would learn faster with LiDAR as opposed to noisier image observations. This LiDAR is simulated as a ray-cast around the drone: the environment calculates the distance between the drone and environment objects in 8 evenly-spaced directions, these values are then passed into the PPO model.
 
-We run this in parallel in 8 environments to accelerate our training. We reduce the step size to keep the batch updates consistent in steps, since when we scale up environments we get more steps per update unless we reduce the rollout step size. We also increased the batch size from 64 to 256 so the learner has more stable policy updates.
+We run 8 parallel environments to accelerate our training. We initially reduced the step size to keep the batch updates consistent in steps, since our simpler experiments converged faster with smaller steps sizes. However, when running it again on the more complex experiments (with trees) we realized we should go back to larger step sizes to maintain stability. We also increased the batch size from 64 to 256 so the learner has more stable policy updates.
 
 The notable hyperparameters we are using for training are:
 * Parallel Environments = 8
 * Learning rate = 3e-4
-* Rollout step size = 2048 // Num_envs
+* Rollout step size = 2048
 * Batch size = 256
 * Number of epochs = 10
 * Discount factor = 0.99
@@ -30,7 +30,7 @@ For an environment with 5 trees, below are comparisons of different combinations
 
 <img src="./images/ep_rew_mean_5_trees_big_steps2.png" width="50%" >
 <img src="./images/ep_len_mean_len_var.png" width="50%" >
-<img src="./images/fps_len_mean_5_trees_big_steps.png" width="50%" >
+<img src="./images/fps_5_trees_big_steps.png" width="50%" >
 
 These graphs show how our training time goes down from ~2 hours to ~0.5 hours just from running 8 parallel environments.
 
