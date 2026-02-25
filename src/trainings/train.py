@@ -7,11 +7,18 @@ from stable_baselines3.common.vec_env import SubprocVecEnv, VecNormalize, VecFra
 from stable_baselines3.common.callbacks import CheckpointCallback
 from PyFlyt.gym_envs import FlattenWaypointEnv
 from quadx_forest_env import QuadXForestEnv
+import imageio_ffmpeg
+from tensorboard_video_recorder import TensorboardVideoRecorder
+
+os.environ["IMAGEIO_FFMPEG_EXE"] = imageio_ffmpeg.get_ffmpeg_exe()
 
 # =========================
 # CONFIG
 # =========================
+
+# --------------Hyperparameters for Training---------------
 NUM_ENVS = 8
+NUM_SENSORS = 8
 NUM_TREES = 5
 TOTAL_TIMESTEPS = 500_000
 N_STEPS = 2048
@@ -21,6 +28,7 @@ N_EPOCHS = 10
 GAMMA = 0.99
 ENT_COEF = 0.1
 
+# --------------Run / checkpoint management settings---------------
 # If True: resumes the most recent run_N (keeps training inside that same run folder).
 # If False: starts a brand new run_(N+1) folder (unless forking, see below).
 RESUME_LATEST_RUN = False
@@ -28,12 +36,19 @@ EXP_NAME = "forest_obstacle_avoidance_v5"
 CHECKPOINT_SAVE_FREQ = 50_000
 N_STACK = 2
 
-# -------- Forking / branching settings --------
 # If START_FROM_RUN is not None, we will create a NEW run_N directory and initialize it from
 # a checkpoint in START_FROM_RUN (optionally at START_FROM_STEPS).
 START_FROM_RUN = "run_4"          # e.g. "run_1" or None
 START_FROM_STEPS =  1500000       # e.g. 100000 (int) or None -> uses latest checkpoint in START_FROM_RUN
 COPY_VECNORM_ON_FORK = True
+
+# ----------- Video recording (TensorBoard) -----------------------
+RECORD_VIDEO = True
+VID_LEN = 2000
+FPS = 30
+VIDEO_EVERY_STEPS = 2000   # record when step % VIDEO_EVERY_STEPS == 0
+RECORD_ENV_IDX = 0         # which env in the VecEnv to record
+RENDER_MODE = "rgb_array"     # replace with None if you don't want rendering
 
 # =========================
 # HELPERS
@@ -81,10 +96,10 @@ def checkpoint_path_for_steps(run_dir: str, steps: int, prefix: str = "checkpoin
 
 def make_env():
     env = QuadXForestEnv(
-        render_mode=None,
+        render_mode=RENDER_MODE,
         num_trees=NUM_TREES,
         num_targets=1,
-        num_sensors=8,
+        num_sensors=NUM_SENSORS,
         sensor_range=5.0,
         max_duration_seconds=30.0,
         flight_dome_size=12.0
@@ -132,6 +147,17 @@ if __name__ == "__main__":
     # ----- Build base env + wrappers that must always match -----
     env = make_vec_env(make_env, n_envs=NUM_ENVS, vec_env_cls=SubprocVecEnv)
     env = VecFrameStack(env, n_stack=N_STACK)
+
+    if RECORD_VIDEO:
+        video_trigger = lambda step: step % VIDEO_EVERY_STEPS == 0
+        env = TensorboardVideoRecorder(
+            env=env,
+            video_trigger=video_trigger,
+            video_length=VID_LEN,
+            fps=FPS,
+            record_video_env_idx=RECORD_ENV_IDX,
+            tb_log_dir=log_dir,  # keep everything inside the run folder
+        )
 
     # ----- Model / VecNormalize initialization -----
     model = None
