@@ -346,3 +346,61 @@ class QuadXForestEnv(QuadXWaypointsEnv):
             })    
             
         attempts += 1
+
+    def render(self):
+        """Third-person chase camera render.
+        Returns an (H, W, 3) uint8 RGB array when render_mode == 'rgb_array'.
+        """
+        # If not asking for rgb frames, let parent handle (or do nothing).
+        if getattr(self, "render_mode", None) != "rgb_array":
+            # If the parent has a render, use it; otherwise return None.
+            try:
+                return super().render()
+            except Exception:
+                return None
+
+        # Resolution: prefer self.render_resolution if present
+        width, height = getattr(self, "render_resolution", (480, 480))
+
+        # Get drone position (lin_pos should be length-3)
+        _, _, _, lin_pos, _ = self.compute_attitude()
+        target = np.array(lin_pos).tolist()
+
+        # Camera settings (tweak if you want)
+        distance = 6.0
+        yaw = 45
+        pitch = -30
+        roll = 0
+
+        view_matrix = self.env.computeViewMatrixFromYawPitchRoll(
+            cameraTargetPosition=target,
+            distance=distance,
+            yaw=yaw,
+            pitch=pitch,
+            roll=roll,
+            upAxisIndex=2,
+        )
+
+        proj_matrix = self.env.computeProjectionMatrixFOV(
+            fov=60,
+            aspect=float(width) / float(height),
+            nearVal=0.1,
+            farVal=100.0,
+        )
+
+        # PyBullet returns (w, h, rgba, depth, seg) in some bindings
+        _, _, rgba, _, _ = self.env.getCameraImage(
+            width=width,
+            height=height,
+            viewMatrix=view_matrix,
+            projectionMatrix=proj_matrix,
+            renderer=getattr(self.env, "ER_BULLET_HARDWARE_OPENGL", 0),
+        )
+
+        rgba = np.asarray(rgba)
+        # Sometimes rgba is flat (H*W*4), sometimes already (H, W, 4)
+        if rgba.ndim == 1:
+            rgba = rgba.reshape((height, width, 4))
+
+        rgb = rgba[:, :, :3].astype(np.uint8)
+        return rgb
