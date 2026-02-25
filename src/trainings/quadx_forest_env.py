@@ -3,6 +3,8 @@ from typing import Any, Literal
 from gymnasium import spaces
 from PyFlyt.gym_envs.quadx_envs.quadx_base_env import QuadXBaseEnv
 from PyFlyt.gym_envs.quadx_envs.quadx_waypoints_env import QuadXWaypointsEnv
+import os
+import pybullet as p
 
 
 class QuadXForestEnv(QuadXWaypointsEnv):
@@ -25,7 +27,9 @@ class QuadXForestEnv(QuadXWaypointsEnv):
         # Tree parameters
         num_trees: int = 20,
         tree_radius_range: tuple[float, float] = (0.1, 0.3),
-        tree_height_range: tuple[float, float] = (5.0, 5.0),  # CHANGED: Fixed tall height
+        tree_height_range: tuple[float, float] = (1.0, 2.0), 
+        tree_mesh_dir_path: str = os.path.join(os.getcwd(), "gazebo_pine_tree_model", "meshes"),
+
         tree_collision_penalty: float = 100.0,
         tree_proximity_penalty_weight: float = 0.5,
         goal_area: dict = None,
@@ -39,6 +43,8 @@ class QuadXForestEnv(QuadXWaypointsEnv):
         self.num_trees = num_trees
         self.tree_radius_range = tree_radius_range
         self.tree_height_range = tree_height_range
+        self.tree_mesh_dir_path = tree_mesh_dir_path
+        self.tree_mesh_path = self._get_tree_mesh_path()
         self.tree_collision_penalty = tree_collision_penalty
         self.tree_proximity_penalty_weight = tree_proximity_penalty_weight
         self.time_step_penalty = time_step_penalty
@@ -255,84 +261,88 @@ class QuadXForestEnv(QuadXWaypointsEnv):
         
         return False
     
+    def _get_tree_mesh_path(self):
+        """Finds the mesh file for the pine tree model"""
+        if os.path.exists(self.tree_mesh_dir_path):
+            mesh_files = [f for f in os.listdir(self.tree_mesh_dir_path) if f.endswith((".dae", ".obj", ".stl"))]
+            if mesh_files:
+                mesh_path = os.path.join(self.tree_mesh_dir_path, mesh_files[0])
+                return mesh_path
+        raise FileNotFoundError(f"No mesh files found in {self.tree_mesh_dir_path}")
+    
+
     def _generate_trees(self):
-        """Generates trees between drone start and waypoint"""
-        
+        """Randomly generates trees in the environment, avoiding points that contain 
+        waypoints and the starting position"""
         self.tree_positions = []
-        
-        # Get start and goal positions
-        start = self.start_pos[0][:2]
-        goal = self.waypoints.targets[0][:2]
-        
         for _ in range(self.num_trees):
-            is_valid_position = False
             attempts = 0
+            is_valid_position = False
             
-            while not is_valid_position and attempts < 100:
-                # Sample along the path
-                t = self.np_random.uniform(0.0, 1.0)
-                center_point = start + t * (goal - start)
-                
-                # Perpendicular offset
-                corridor_width = 2.0
-                direction = goal - start
-                direction_norm = direction / (np.linalg.norm(direction) + 1e-8)
-                perpendicular = np.array([-direction_norm[1], direction_norm[0]])
-                offset_distance = self.np_random.uniform(-corridor_width, corridor_width)
-                
-                xy_pos = center_point + offset_distance * perpendicular
-                x, y = xy_pos
-                z = 0
+            while attempts < 20:
+                # randomly position a tree within the flight dome at point (x, y, z (ground))
+                x = self.np_random.uniform(-self.flight_dome_size, self.flight_dome_size)
+                y = self.np_random.uniform(-self.flight_dome_size, self.flight_dome_size)
+                z = 0  
                 pos = np.array([x, y, z])
                 
-                # Validation checks
-                if np.linalg.norm(pos[:2] - self.start_pos[0][:2]) < 0.8:
+                # check tree is far enough from drone starting position 
+                if np.linalg.norm(pos[:2] - self.start_pos[0][:2]) < 2:
                     attempts += 1
                     continue
                 
+                # check tree is far enough from waypoints 
                 is_too_close = False
-                if hasattr(self.waypoints, 'targets') and len(self.waypoints.targets) > 0:
-                    waypoint = self.waypoints.targets[0]
-                    if np.linalg.norm(pos[:2] - waypoint[:2]) < 1.0:
-                        is_too_close = True
-                
-                if np.linalg.norm(pos[:2]) > self.flight_dome_size / 2:
+                if hasattr(self.waypoints, "targets"):
+                    for waypoint in self.waypoints.targets:
+                        if np.linalg.norm(pos[:2] - waypoint[:2]) < 2:
+                            is_too_close = True
+                            break
+                if is_too_close:
                     attempts += 1
                     continue
                 
-                if not is_too_close:
-                    is_valid_position = True
-                    # CHANGED: Use max height from range (or fixed tall height)
-                    height = self.tree_height_range[1]  # Use max height
-                    radius = self.np_random.uniform(*self.tree_radius_range)
-                    
-                    collision_shape = self.env.createCollisionShape(
-                        shapeType=self.env.GEOM_CYLINDER,
-                        radius=radius,
-                        height=height
-                    )
-                    
-                    visual_shape = self.env.createVisualShape(
-                        shapeType=self.env.GEOM_CYLINDER,
-                        radius=radius,
-                        length=height,
-                        rgbaColor=[0.55, 0.27, 0.07, 1],
-                        specularColor=[0.4, 0.4, 0]
-                    )
-                    
-                    tree_id = self.env.createMultiBody(
-                        baseMass=0,
-                        baseCollisionShapeIndex=collision_shape,
-                        baseVisualShapeIndex=visual_shape,
-                        basePosition=[x, y, height/2],
-                        baseOrientation=[0, 0, 0, 1]
-                    )
-                    
-                    self.tree_positions.append({
-                        'id': tree_id,
-                        'position': np.array([x, y, height/2]),
-                        'radius': radius,
-                        'height': height
-                    })
-                
-                attempts += 1
+                # passed checks, is valid position
+                is_valid_position = True
+                break
+
+            if not is_valid_position:
+                continue
+
+            # random tree size and orientation
+            height = self.np_random.uniform(*self.tree_height_range)
+            radius = self.np_random.uniform(*self.tree_radius_range)
+            rotation = self.np_random.uniform(0, 2*np.pi)
+            orientation = p.getQuaternionFromEuler([0, 0, rotation])
+            
+            # load Gazebo tree mesh
+            visual_shape = self.env.createVisualShape(
+                shapeType=self.env.GEOM_MESH,
+                fileName=self.tree_mesh_path,
+                meshScale=[height, height, height],
+                rgbaColor=[178/255, 172/255, 136/255, 1]
+            )
+        
+            # use cylinder collision shape
+            collision_shape = self.env.createCollisionShape(
+                shapeType=self.env.GEOM_CYLINDER,
+                radius=radius,
+                height=height
+            )
+            
+            # create tree
+            tree_id = self.env.createMultiBody(
+                baseMass=0,
+                baseCollisionShapeIndex=collision_shape,
+                baseVisualShapeIndex=visual_shape,
+                basePosition=[x, y, z],
+                baseOrientation=orientation
+            )
+            self.tree_positions.append({
+                'id': tree_id,
+                'position': np.array([x, y, z]),
+                'radius': radius,
+                'height': height
+            })    
+            
+        attempts += 1
