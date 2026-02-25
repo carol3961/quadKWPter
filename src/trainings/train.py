@@ -44,12 +44,11 @@ START_FROM_STEPS =  None       # e.g. 100000 (int) or None -> uses latest checkp
 COPY_VECNORM_ON_FORK = True
 
 # ----------- Video recording (TensorBoard) -----------------------
-RECORD_VIDEO = True
 VID_LEN = 2000
 FPS = 30
 VIDEO_EVERY_STEPS = 2000   # record when step % VIDEO_EVERY_STEPS == 0
 RECORD_ENV_IDX = 0         # which env in the VecEnv to record
-RECORD_VIDEO = True   # <--- toggle this
+RECORD_VIDEO = False   # <--- toggle this
 
 # =========================
 # HELPERS
