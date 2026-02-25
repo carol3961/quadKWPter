@@ -151,4 +151,4 @@ dmypy.json
 cython_debug/
 
 # logs
-**/archive_logs/
+**/archive_folders/
