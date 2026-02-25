@@ -1,3 +1,4 @@
+import os
 import numpy as np
 import tensorflow as tf
 import tensorflow.compat.v1 as tf1
@@ -61,9 +62,14 @@ class TensorboardVideoRecorder(VecEnvWrapper):
         if frames[0].shape[-1] == 4:
             frames = [f[..., :3] for f in frames]
 
-        h, w, c = frames[0].shape
-        pxfmt = {1: "gray", 3: "rgb24"}[c]
+        # Ensure uint8 contiguous frames (ffmpeg rawvideo expects this)
+        frames = [np.ascontiguousarray(f.astype(np.uint8)) for f in frames]
 
+        h, w, c = frames[0].shape
+        if c not in (1, 3):
+            raise ValueError(f"Unexpected channels: {c}, expected 1 or 3")
+
+        pxfmt = {1: "gray", 3: "rgb24"}[c]
         ffmpeg_exe = os.environ.get("IMAGEIO_FFMPEG_EXE", "ffmpeg")
 
         cmd = [
@@ -75,20 +81,29 @@ class TensorboardVideoRecorder(VecEnvWrapper):
             "-s", f"{w}x{h}",
             "-pix_fmt", pxfmt,
             "-i", "-",
-            "-filter_complex",
-            "[0:v]split[x][z];[z]palettegen[y];[x]fifo[x];[x][y]paletteuse",
-            "-r", f"{fps:.02f}",
+            "-vf", "fps=15,scale=320:-1:flags=lanczos",  # <--- reduces load a lot (optional but recommended)
             "-f", "gif",
             "-"
         ]
 
         proc = Popen(cmd, stdin=PIPE, stdout=PIPE, stderr=PIPE)
-        for image in frames:
-            proc.stdin.write(image.tobytes())
-        out, err = proc.communicate()
 
-        if proc.returncode:
-            raise IOError("\n".join([" ".join(cmd), err.decode("utf8")]))
+        try:
+            for image in frames:
+                proc.stdin.write(image.tobytes())
+            proc.stdin.close()
+            out = proc.stdout.read()
+            err = proc.stderr.read()
+            ret = proc.wait()
+        except BrokenPipeError:
+            # ffmpeg died early; pull stderr for the real reason
+            err = proc.stderr.read().decode("utf8", errors="replace")
+            raise IOError(f"ffmpeg BrokenPipeError.\nCommand: {' '.join(cmd)}\nffmpeg stderr:\n{err}")
+
+        if ret != 0:
+            err_txt = err.decode("utf8", errors="replace") if isinstance(err, (bytes, bytearray)) else str(err)
+            raise IOError(f"ffmpeg failed (code {ret}).\nCommand: {' '.join(cmd)}\nffmpeg stderr:\n{err_txt}")
+
         return out
 
     def _log_video_to_tensorboard(self, tag, video, step):
@@ -113,9 +128,21 @@ class TensorboardVideoRecorder(VecEnvWrapper):
         return obs
 
     def _record_frame(self):
-        # Render only the env you want (works for SubprocVecEnv and DummyVecEnv)
         frames = self.venv.env_method("render", indices=[self._record_video_env_idx])
         frame = frames[0]
+
+        # If render() returns None or something unexpected, just skip
+        if frame is None:
+            return
+
+        frame = np.asarray(frame)
+
+        # Expect (H, W, C) or (H, W)
+        if frame.ndim == 2:
+            frame = frame[..., None]
+        if frame.ndim != 3:
+            return
+
         self._recorded_frames.append(frame)
 
     def _finalize_video(self):
