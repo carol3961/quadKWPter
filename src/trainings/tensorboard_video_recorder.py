@@ -60,21 +60,35 @@ class TensorboardVideoRecorder(VecEnvWrapper):
     def _encode_gif(frames, fps):
         if frames[0].shape[-1] == 4:
             frames = [f[..., :3] for f in frames]
+
         h, w, c = frames[0].shape
-        pxfmt = {1: 'gray', 3: 'rgb24'}[c]
-        cmd = ' '.join([
-            'ffmpeg -y -f rawvideo -vcodec rawvideo',
-            f'-r {fps:.02f} -s {w}x{h} -pix_fmt {pxfmt} -i - -filter_complex',
-            '[0:v]split[x][z];[z]palettegen[y];[x]fifo[x];[x][y]paletteuse',
-            f'-r {fps:.02f} -f gif -'
-        ])
-        proc = Popen(cmd.split(' '), stdin=PIPE, stdout=PIPE, stderr=PIPE)
+        pxfmt = {1: "gray", 3: "rgb24"}[c]
+
+        ffmpeg_exe = os.environ.get("IMAGEIO_FFMPEG_EXE", "ffmpeg")
+
+        cmd = [
+            ffmpeg_exe,
+            "-y",
+            "-f", "rawvideo",
+            "-vcodec", "rawvideo",
+            "-r", f"{fps:.02f}",
+            "-s", f"{w}x{h}",
+            "-pix_fmt", pxfmt,
+            "-i", "-",
+            "-filter_complex",
+            "[0:v]split[x][z];[z]palettegen[y];[x]fifo[x];[x][y]paletteuse",
+            "-r", f"{fps:.02f}",
+            "-f", "gif",
+            "-"
+        ]
+
+        proc = Popen(cmd, stdin=PIPE, stdout=PIPE, stderr=PIPE)
         for image in frames:
             proc.stdin.write(image.tobytes())
         out, err = proc.communicate()
+
         if proc.returncode:
-            raise IOError('\n'.join([' '.join(cmd.split(" ")), err.decode('utf8')]))
-        del proc
+            raise IOError("\n".join([" ".join(cmd), err.decode("utf8")]))
         return out
 
     def _log_video_to_tensorboard(self, tag, video, step):
@@ -99,8 +113,9 @@ class TensorboardVideoRecorder(VecEnvWrapper):
         return obs
 
     def _record_frame(self):
-        frames = self.venv.env_method("render")
-        frame = frames[self._record_video_env_idx]
+        # Render only the env you want (works for SubprocVecEnv and DummyVecEnv)
+        frames = self.venv.env_method("render", indices=[self._record_video_env_idx])
+        frame = frames[0]
         self._recorded_frames.append(frame)
 
     def _finalize_video(self):
@@ -108,6 +123,7 @@ class TensorboardVideoRecorder(VecEnvWrapper):
             return
         video_np = np.array(self._recorded_frames)  # Shape: (T, H, W, C)
         self._log_video_to_tensorboard(self._tag, video_np, self._global_step)
+        self._file_writer.flush()
         self._recording = False
         self._recording_step_count = 0
         self._recorded_frames = []
