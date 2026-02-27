@@ -272,65 +272,84 @@ class QuadXForestEnv(QuadXWaypointsEnv):
     
 
     def _generate_trees(self):
-        """Randomly generates trees in the environment, avoiding points that contain 
-        waypoints and the starting position"""
+        """Generates trees in a corridor between drone start and waypoint(s)."""
+
         self.tree_positions = []
+
+        # Start and primary goal in XY
+        start = np.array(self.start_pos[0][:2], dtype=float)
+        goal = np.array(self.waypoints.targets[0][:2], dtype=float)
+
+        # Corridor controls (tune these)
+        corridor_width = 4.0          # same idea as v1 (half-width)
+        max_attempts = 50             # attempts per tree
+        min_start_clearance = 2.0     # v2 used 2
+        min_waypoint_clearance = 2.0  # v2 used 2
+
+        direction = goal - start
+        norm = np.linalg.norm(direction) + 1e-8
+        direction_norm = direction / norm
+        perpendicular = np.array([-direction_norm[1], direction_norm[0]])
+
         for _ in range(self.num_trees):
-            attempts = 0
-            is_valid_position = False
-            
-            while attempts < 20:
-                # randomly position a tree within the flight dome at point (x, y, z (ground))
-                x = self.np_random.uniform(-self.flight_dome_size, self.flight_dome_size)
-                y = self.np_random.uniform(-self.flight_dome_size, self.flight_dome_size)
-                z = 0  
-                pos = np.array([x, y, z])
-                
-                # check tree is far enough from drone starting position 
-                if np.linalg.norm(pos[:2] - self.start_pos[0][:2]) < 2:
-                    attempts += 1
+            placed = False
+
+            for attempts in range(max_attempts):
+                # sample along the start→goal segment
+                t = self.np_random.uniform(0.0, 1.0)
+                center_point = start + t * (goal - start)
+
+                # offset perpendicular within corridor
+                offset = self.np_random.uniform(-corridor_width, corridor_width)
+                xy_pos = center_point + offset * perpendicular
+                x, y = float(xy_pos[0]), float(xy_pos[1])
+                z = 0.0
+                pos = np.array([x, y, z], dtype=float)
+
+                # keep inside dome 
+                if abs(x) > self.flight_dome_size or abs(y) > self.flight_dome_size:
                     continue
-                
-                # check tree is far enough from waypoints 
-                is_too_close = False
-                if hasattr(self.waypoints, "targets"):
-                    for waypoint in self.waypoints.targets:
-                        if np.linalg.norm(pos[:2] - waypoint[:2]) < 2:
-                            is_too_close = True
+
+                # clear start
+                if np.linalg.norm(pos[:2] - start) < min_start_clearance:
+                    continue
+
+                # clear all waypoints/targets
+                too_close = False
+                if hasattr(self.waypoints, "targets") and len(self.waypoints.targets) > 0:
+                    for wp in self.waypoints.targets:
+                        if np.linalg.norm(pos[:2] - np.array(wp[:2], dtype=float)) < min_waypoint_clearance:
+                            too_close = True
                             break
-                if is_too_close:
-                    attempts += 1
+                if too_close:
                     continue
-                
-                # passed checks, is valid position
-                is_valid_position = True
+
+                # valid placement found
+                placed = True
                 break
 
-            if not is_valid_position:
+            if not placed:
                 continue
 
-            # random tree size and orientation
-            height = self.np_random.uniform(*self.tree_height_range)
-            radius = self.np_random.uniform(*self.tree_radius_range)
-            rotation = self.np_random.uniform(0, 2*np.pi)
-            orientation = p.getQuaternionFromEuler([0, 0, rotation])
-            
-            # load Gazebo tree mesh
+            height = float(self.np_random.uniform(*self.tree_height_range))
+            radius = float(self.np_random.uniform(*self.tree_radius_range))
+
+            rotation = float(self.np_random.uniform(0.0, 2 * np.pi))
+            orientation = p.getQuaternionFromEuler([0.0, 0.0, rotation])
+
             visual_shape = self.env.createVisualShape(
                 shapeType=self.env.GEOM_MESH,
                 fileName=self.tree_mesh_path,
                 meshScale=[height, height, height],
                 rgbaColor=[178/255, 172/255, 136/255, 1]
             )
-        
-            # use cylinder collision shape
+
             collision_shape = self.env.createCollisionShape(
                 shapeType=self.env.GEOM_CYLINDER,
                 radius=radius,
                 height=height
             )
-            
-            # create tree
+
             tree_id = self.env.createMultiBody(
                 baseMass=0,
                 baseCollisionShapeIndex=collision_shape,
@@ -338,14 +357,13 @@ class QuadXForestEnv(QuadXWaypointsEnv):
                 basePosition=[x, y, z],
                 baseOrientation=orientation
             )
+
             self.tree_positions.append({
-                'id': tree_id,
-                'position': np.array([x, y, z]),
-                'radius': radius,
-                'height': height
-            })    
-            
-        attempts += 1
+                "id": tree_id,
+                "position": np.array([x, y, z], dtype=float),
+                "radius": radius,
+                "height": height
+            })
 
     def render(self):
         """Third-person chase camera render.
