@@ -4,11 +4,14 @@ import shutil
 from stable_baselines3 import PPO
 from stable_baselines3.common.env_util import make_vec_env
 from stable_baselines3.common.vec_env import SubprocVecEnv, VecNormalize, VecFrameStack
-from stable_baselines3.common.callbacks import CheckpointCallback
+from stable_baselines3.common.callbacks import CheckpointCallback, CallbackList, BaseCallback
 from PyFlyt.gym_envs import FlattenWaypointEnv
 from quadx_forest_env import QuadXForestEnv
 import imageio_ffmpeg
 from tensorboard_video_recorder import TensorboardVideoRecorder
+from wandb.integration.sb3 import WandbCallback
+import wandb
+import numpy as np
 
 os.environ["IMAGEIO_FFMPEG_EXE"] = imageio_ffmpeg.get_ffmpeg_exe()
 
@@ -20,7 +23,7 @@ os.environ["IMAGEIO_FFMPEG_EXE"] = imageio_ffmpeg.get_ffmpeg_exe()
 NUM_ENVS = 8
 NUM_SENSORS = 8
 NUM_TREES = 5
-TOTAL_TIMESTEPS = 100_000
+TOTAL_TIMESTEPS = 1_000_000
 N_STEPS = 2048
 BATCH_SIZE = 1024
 LEARNING_RATE = 1e-4
@@ -32,8 +35,8 @@ ENT_COEF = 0.1
 # If True: resumes the most recent run_N (keeps training inside that same run folder).
 # If False: starts a brand new run_(N+1) folder (unless forking, see below).
 RESUME_LATEST_RUN = False
-# EXP_NAME = "forest_obstacle_avoidance_v5"
-EXP_NAME = "test"
+EXP_NAME = "forest_obstacle_avoidance_v5"
+# EXP_NAME = "test"
 CHECKPOINT_SAVE_FREQ = 50_000
 N_STACK = 2
 
@@ -106,6 +109,69 @@ def make_env():
     )
     return FlattenWaypointEnv(env, context_length=1)
 
+
+class ForestEnvWandbCallback(BaseCallback):
+    """Logs env-specific metrics to wandb for clear graphs (rewards, targets reached, collision)."""
+
+    def __init__(self, log_freq: int = 1, verbose: int = 0):
+        super().__init__(verbose)
+        self.log_freq = max(1, log_freq)
+        self.episode_rewards: list[float] = []
+        self.episode_lengths: list[int] = []
+        self.num_targets_reached: list[int] = []
+        self.collisions: list[int] = []
+        self.env_complete: list[int] = []
+        self.episodes_ended: int = 0  # any episode end in this rollout
+
+    def _on_step(self) -> bool:
+        infos = self.locals.get("infos", [])
+        dones = self.locals.get("dones", np.array([]))
+        if not infos:
+            return True
+        for i, info in enumerate(infos):
+            # When episode ends (Gymnasium often adds "episode" key)
+            if "episode" in info:
+                self.episode_rewards.append(info["episode"]["r"])
+                self.episode_lengths.append(info["episode"].get("l", 0))
+            # Record env-specific stats on episode end (use done flag if no "episode" key)
+            if (i < len(dones) and dones[i]) or "episode" in info:
+                self.episodes_ended += 1
+                if "num_targets_reached" in info:
+                    self.num_targets_reached.append(info["num_targets_reached"])
+                if info.get("collision"):
+                    self.collisions.append(1)
+                if info.get("env_complete"):
+                    self.env_complete.append(1)
+        return True
+
+    def _on_rollout_end(self) -> None:
+        if self.n_calls % self.log_freq != 0:
+            return
+        log_dict = {}
+        if self.episode_rewards:
+            log_dict["env/episode_reward_mean"] = np.mean(self.episode_rewards)
+            log_dict["env/episode_reward_std"] = np.std(self.episode_rewards)
+            log_dict["env/episode_length_mean"] = np.mean(self.episode_lengths)
+            self.episode_rewards.clear()
+            self.episode_lengths.clear()
+        if self.num_targets_reached:
+            log_dict["env/num_targets_reached_mean"] = np.mean(self.num_targets_reached)
+            self.num_targets_reached.clear()
+        if self.collisions:
+            log_dict["env/collision_count"] = sum(self.collisions)
+            self.collisions.clear()
+        if self.env_complete:
+            # Total episodes (across all 8 envs) that ended with goal reached this rollout
+            goal_count = sum(self.env_complete)
+            log_dict["env/goal_reached_per_rollout"] = goal_count
+            if self.episodes_ended > 0:
+                # Fraction of ended episodes that reached the goal (0–1, easy to read)
+                log_dict["env/goal_reached_rate"] = goal_count / self.episodes_ended
+            self.env_complete.clear()
+        self.episodes_ended = 0
+        if log_dict:
+            wandb.log(log_dict, step=self.num_timesteps)
+
 # =========================
 # MAIN
 # =========================
@@ -143,6 +209,33 @@ if __name__ == "__main__":
 
     # Per-run VecNormalize stats file
     vecnorm_path = os.path.join(log_dir, "vecnormalize.pkl")
+
+    # ----- Wandb: config + TensorBoard sync for clear graphs -----
+    config = {
+        "total_timesteps": TOTAL_TIMESTEPS,
+        "n_steps": N_STEPS,
+        "batch_size": BATCH_SIZE,
+        "learning_rate": LEARNING_RATE,
+        "n_epochs": N_EPOCHS,
+        "gamma": GAMMA,
+        "ent_coef": ENT_COEF,
+        "num_envs": NUM_ENVS,
+        "num_trees": NUM_TREES,
+        "num_sensors": NUM_SENSORS,
+        "n_stack": N_STACK,
+        "exp_name": EXP_NAME,
+        "run_id": run_id,
+    }
+    wandb.init(
+        project="quadx-forest-obstacle-avoidance",
+        entity="nperroch-uci",
+        name=f"forest_obstacle_avoidance_v5_{run_id}",
+        tags=["forest_obstacle_avoidance_v5", run_id],
+        config=config,
+        sync_tensorboard=True,
+    )
+    # SB3 writes to log_dir; wandb syncs TB from the run dir when sync_tensorboard=True.
+    # To have TB logs show in wandb, we point tensorboard_log at the wandb run dir below.
 
     # ----- Build base env + wrappers that must always match -----
     env = make_vec_env(make_env, n_envs=NUM_ENVS, vec_env_cls=SubprocVecEnv)
@@ -199,7 +292,7 @@ if __name__ == "__main__":
             print(f"✓ Copied VecNormalize stats into new run: {vecnorm_path}")
 
         # Load model from the chosen source checkpoint
-        model = PPO.load(source_ckpt, env=env, tensorboard_log=log_dir)
+        model = PPO.load(source_ckpt, env=env, tensorboard_log=wandb.run.dir)
         reset_timesteps = False
 
     else:
@@ -218,7 +311,7 @@ if __name__ == "__main__":
 
         if load_path:
             print(f"✓ Resuming from checkpoint: {load_path}")
-            model = PPO.load(load_path, env=env, tensorboard_log=log_dir)
+            model = PPO.load(load_path, env=env, tensorboard_log=wandb.run.dir)
             reset_timesteps = False
         else:
             print("✗ No checkpoint found in this run. Starting PPO fresh.")
@@ -226,7 +319,7 @@ if __name__ == "__main__":
                 "MlpPolicy",
                 env,
                 verbose=0,
-                tensorboard_log=log_dir,
+                tensorboard_log=wandb.run.dir,
                 n_steps=N_STEPS,
                 batch_size=BATCH_SIZE,
                 learning_rate=LEARNING_RATE,
@@ -248,7 +341,15 @@ if __name__ == "__main__":
     print(f"Training for {TOTAL_TIMESTEPS:,} timesteps...")
     model.learn(
         total_timesteps=TOTAL_TIMESTEPS,
-        callback=checkpoint_callback,
+        callback=[
+            checkpoint_callback,
+            ForestEnvWandbCallback(log_freq=1),
+            WandbCallback(
+                gradient_save_freq=0,
+                model_save_freq=0,
+                model_save_path=log_dir,
+            ),
+        ],
         reset_num_timesteps=reset_timesteps,
         progress_bar=False
     )
@@ -257,5 +358,3 @@ if __name__ == "__main__":
     env.save(vecnorm_path)
     model.save(os.path.join(log_dir, f"final_model_{run_id}"))
     env.close()
-
-    print("Training complete!")

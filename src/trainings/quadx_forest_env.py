@@ -9,7 +9,7 @@ import pybullet as p
 
 class QuadXForestEnv(QuadXWaypointsEnv):
     """QuadX Waypoints Environment with trees and obstacle detection"""
-    
+
     def __init__(
         self,
         sparse_reward: bool = False,
@@ -27,7 +27,7 @@ class QuadXForestEnv(QuadXWaypointsEnv):
         # Tree parameters
         num_trees: int = 20,
         tree_radius_range: tuple[float, float] = (0.1, 0.3),
-        tree_height_range: tuple[float, float] = (1.0, 2.0), 
+        tree_height_range: tuple[float, float] = (1.0, 2.0),
         tree_mesh_dir_path: str = os.path.join(os.getcwd(), "gazebo_pine_tree_model", "meshes"),
 
         tree_collision_penalty: float = 100.0,
@@ -49,11 +49,11 @@ class QuadXForestEnv(QuadXWaypointsEnv):
         self.tree_proximity_penalty_weight = tree_proximity_penalty_weight
         self.time_step_penalty = time_step_penalty
         self.goal_reach_distance = goal_reach_distance
-        
+
         # Sensor configuration
         self.num_sensors = num_sensors
         self.sensor_range = sensor_range
-        
+
         # Default goal area
         if goal_area is None:
             self.goal_area = {
@@ -63,7 +63,7 @@ class QuadXForestEnv(QuadXWaypointsEnv):
             }
         else:
             self.goal_area = goal_area
-        
+
         # Call parent init
         super().__init__(
             sparse_reward=sparse_reward,
@@ -79,7 +79,7 @@ class QuadXForestEnv(QuadXWaypointsEnv):
             render_mode=render_mode,
             render_resolution=render_resolution,
         )
-        
+
         # Override observation space to include sensors
         self.observation_space = spaces.Dict(
             {
@@ -101,166 +101,154 @@ class QuadXForestEnv(QuadXWaypointsEnv):
                 ),
             }
         )
-    
+
     def reset(
         self, *, seed: None | int = None, options: None | dict[str, Any] = dict()
     ) -> tuple[dict[Literal["attitude", "target_deltas", "obstacle_distances"], np.ndarray], dict]:
         """Resets the environment with trees and custom spawn positions"""
 
         QuadXBaseEnv.begin_reset(self, seed, options)
-        
+
         # Parent's waypoint reset
         self.waypoints.reset(self.env, self.np_random)
-        
+
         # Generate goal in constrained area
-        goal_x = self.np_random.uniform(self.goal_area['x_min'], 
+        goal_x = self.np_random.uniform(self.goal_area['x_min'],
                                         self.goal_area['x_max'])
-        goal_y = self.np_random.uniform(self.goal_area['y_min'], 
+        goal_y = self.np_random.uniform(self.goal_area['y_min'],
                                         self.goal_area['y_max'])
-        goal_z = self.np_random.uniform(self.goal_area['z_min'], 
+        goal_z = self.np_random.uniform(self.goal_area['z_min'],
                                         self.goal_area['z_max'])
-        
+
         desired_goal = np.array([goal_x, goal_y, goal_z])
-        
+
         # Update logical and visual target position
         self.waypoints.targets[0] = desired_goal
-        
+
         if self.waypoints.enable_render and len(self.waypoints.target_visual) > 0:
             self.env.resetBasePositionAndOrientation(
                 self.waypoints.target_visual[0],
                 desired_goal.tolist(),
                 [0, 0, 0, 1]
             )
-        
+
         # Generate trees
         self._generate_trees()
-        
+
         # Reset distance tracking
         self.previous_distance = np.linalg.norm(self.start_pos[0] - desired_goal)
-        
+
         self.info["num_targets_reached"] = 0
         QuadXBaseEnv.end_reset(self)
-        
+
         return self.state, self.info
-    
+
     def compute_state(self) -> None:
         """Computes the state including obstacle sensor readings"""
-        
+
         # Get base state from parent
         super().compute_state()
-        
+
         # Add obstacle sensor readings
         obstacle_distances = self._get_obstacle_distances()
         self.state["obstacle_distances"] = obstacle_distances
-    
+
     def _get_obstacle_distances(self) -> np.ndarray:
         """Cast rays around the drone to detect obstacles"""
-        
+
         # Get drone state
         ang_vel, ang_pos, lin_vel, lin_pos, quaternion = self.compute_attitude()
-        
+
         # Get rotation matrix (quaternion is a tuple, convert to list)
         rotation_matrix = np.array(
             self.env.getMatrixFromQuaternion(list(quaternion))
         ).reshape(3, 3)
-        
+
         # Get drone position as numpy array
         drone_pos = np.array(lin_pos).flatten()
-        
+
         # Initialize distances to max range
         distances = np.full(self.num_sensors, self.sensor_range, dtype=np.float64)
-        
+
         # Cast rays around drone
         for i in range(self.num_sensors):
             angle = 2 * np.pi * i / self.num_sensors
-            
+
             local_dir = np.array([np.cos(angle), np.sin(angle), 0.0])
             world_dir = rotation_matrix @ local_dir
-            
+
             ray_from = drone_pos
             ray_to = ray_from + world_dir * self.sensor_range
-            
+
             ray_result = self.env.rayTest(ray_from.tolist(), ray_to.tolist())
-            
+
             if len(ray_result) > 0 and ray_result[0][0] >= 0:
                 distances[i] = ray_result[0][2] * self.sensor_range
-        
+
         return distances
-    
-    def compute_state_reward(self):
-        # --- Progress toward goal ---
-        current_dist = np.linalg.norm(
-            self.env.state(0)[-1][:3] - self.targets[self.current_target_index]
-        )
-        progress = self.previous_distance - current_dist
-        self.previous_distance = current_dist
-        # progress_reward = 5.0 * progress
-        progress_reward = 7.0 * progress
 
-        # --- Survival (encourages staying alive → encourages dodging) ---
-        # survival_reward = 0.5
-        survival_reward = -0.5
-
-        # --- Obstacle proximity (exponential) ---
-        obstacle_penalty = 0.0
-        danger_radius = 3.0
-        if hasattr(self, "obstacle_distances"):
-            min_dist = np.min(self.obstacle_distances)
+    def compute_term_trunc_reward(self) -> None:
+        """Custom reward and termination: waypoints + distance shaping + tree collision + obstacle proximity."""
+        # Base (ground, bounds) + waypoints (progress, target reached)
+        super().compute_term_trunc_reward()
+        # If base already terminated (e.g. ground hit, out of bounds), don't overwrite
+        if self.termination or self.truncation:
+            return
+        # Tree collision: big penalty and terminate
+        if self._check_tree_collision():
+            self.reward = -100.0
+            self.info["collision"] = True
+            self.termination |= True
+            return
+        # Obstacle proximity: penalty so the agent learns to stay away from trees
+        if hasattr(self, "state") and "obstacle_distances" in self.state:
+            min_dist = np.min(self.state["obstacle_distances"])
+            danger_radius = 3.0
             if min_dist < danger_radius:
                 normalized = min_dist / danger_radius
-                obstacle_penalty = -3.0 * (1.0 - normalized) ** 2
-                # At distance 0.5 → penalty = -1.9
-                # At distance 1.0 → penalty = -1.3
-                # At distance 2.0 → penalty = -0.3
+                self.reward -= 3.0 * (1.0 - normalized) ** 2
+        # Distance-based shaping: reward getting closer, penalize moving away
+        # Use the current waypoint target (same one the parent env uses)
+        _, _, _, lin_pos, _ = self.compute_attitude()
+        lin_pos = np.asarray(lin_pos).reshape(-1)[:3]
+        goal_pos = np.asarray(self.waypoints.targets[0]).reshape(-1)[:3]
+        delta = goal_pos - lin_pos
+        delta[2] *= 2.0  # make vertical error count 2×
+        dist = float(np.linalg.norm(delta))
+        # Initialize previous_distance on first call if needed
+        if not hasattr(self, "previous_distance"):
+            self.previous_distance = dist
+        progress = self.previous_distance - dist  # >0 if we moved closer, <0 if we moved away
+        self.previous_distance = dist
+        # Scale: positive reward when closer, increasing penalty when farther away
+        if progress > 0:
+            self.reward += 5.0 * 1 / dist
+        else:
+            self.reward -= 5.0 * 1 / dist
 
-        # --- Goal reached bonus ---
-        goal_bonus = 0.0
-        goal_threshold = 1.0 
-        if current_dist < goal_threshold:
-            goal_bonus = 50.0
-        total += goal_bonus
-
-        # --- Velocity toward goal (rewards speed in the right direction) ---
-        velocity = self.env.state(0)[-1][3:6]  # adjust based on your state layout
-        goal_direction = (
-            self.targets[self.current_target_index] - self.env.state(0)[-1][:3]
-        )
-        goal_direction_norm = goal_direction / (np.linalg.norm(goal_direction) + 1e-8)
-        speed_toward_goal = np.dot(velocity, goal_direction_norm)
-        velocity_reward = 2.0 * max(speed_toward_goal, 0.0)
-
-
-        # --- Collision (devastating) ---
-        collision_penalty = 0.0
-        if self.env.contact_array[0]:  # however you detect tree collision
-            collision_penalty = -100.0
-
-        total = progress_reward + survival_reward + obstacle_penalty + collision_penalty
-        return total
-    
     def _check_tree_collision(self) -> bool:
         """Check if drone has collided with any tree"""
-        
+
         # Get drone's body ID from the aviary
         try:
             drone_id = self.env.drones[0].Id
         except:
             # Alternative method
             return False
-        
+
         # Get all contact points for the drone
         contact_points = self.env.getContactPoints(bodyA=drone_id)
-        
+
         # Check if any contact is with a tree
         for contact in contact_points:
             body_b = contact[2]
-            
+
             for tree in self.tree_positions:
                 if body_b == tree['id']:
                     return True
-        
+
         return False
-    
+
     def _get_tree_mesh_path(self):
         """Finds the mesh file for the pine tree model"""
         if os.path.exists(self.tree_mesh_dir_path):
@@ -269,29 +257,29 @@ class QuadXForestEnv(QuadXWaypointsEnv):
                 mesh_path = os.path.join(self.tree_mesh_dir_path, mesh_files[0])
                 return mesh_path
         raise FileNotFoundError(f"No mesh files found in {self.tree_mesh_dir_path}")
-    
+
 
     def _generate_trees(self):
-        """Randomly generates trees in the environment, avoiding points that contain 
+        """Randomly generates trees in the environment, avoiding points that contain
         waypoints and the starting position"""
         self.tree_positions = []
         for _ in range(self.num_trees):
             attempts = 0
             is_valid_position = False
-            
+
             while attempts < 20:
                 # randomly position a tree within the flight dome at point (x, y, z (ground))
                 x = self.np_random.uniform(-self.flight_dome_size, self.flight_dome_size)
                 y = self.np_random.uniform(-self.flight_dome_size, self.flight_dome_size)
-                z = 0  
+                z = 0
                 pos = np.array([x, y, z])
-                
-                # check tree is far enough from drone starting position 
+
+                # check tree is far enough from drone starting position
                 if np.linalg.norm(pos[:2] - self.start_pos[0][:2]) < 2:
                     attempts += 1
                     continue
-                
-                # check tree is far enough from waypoints 
+
+                # check tree is far enough from waypoints
                 is_too_close = False
                 if hasattr(self.waypoints, "targets"):
                     for waypoint in self.waypoints.targets:
@@ -301,7 +289,7 @@ class QuadXForestEnv(QuadXWaypointsEnv):
                 if is_too_close:
                     attempts += 1
                     continue
-                
+
                 # passed checks, is valid position
                 is_valid_position = True
                 break
@@ -314,7 +302,7 @@ class QuadXForestEnv(QuadXWaypointsEnv):
             radius = self.np_random.uniform(*self.tree_radius_range)
             rotation = self.np_random.uniform(0, 2*np.pi)
             orientation = p.getQuaternionFromEuler([0, 0, rotation])
-            
+
             # load Gazebo tree mesh
             visual_shape = self.env.createVisualShape(
                 shapeType=self.env.GEOM_MESH,
@@ -322,14 +310,14 @@ class QuadXForestEnv(QuadXWaypointsEnv):
                 meshScale=[height, height, height],
                 rgbaColor=[178/255, 172/255, 136/255, 1]
             )
-        
+
             # use cylinder collision shape
             collision_shape = self.env.createCollisionShape(
                 shapeType=self.env.GEOM_CYLINDER,
                 radius=radius,
                 height=height
             )
-            
+
             # create tree
             tree_id = self.env.createMultiBody(
                 baseMass=0,
@@ -343,8 +331,8 @@ class QuadXForestEnv(QuadXWaypointsEnv):
                 'position': np.array([x, y, z]),
                 'radius': radius,
                 'height': height
-            })    
-            
+            })
+
         attempts += 1
 
     def render(self):

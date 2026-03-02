@@ -10,14 +10,14 @@ from train import NUM_TREES, N_STACK, EXP_NAME
 # CONFIG
 # =========================
 EXP_NAME = EXP_NAME
-RUN_ID = "run_6"  # <-- change to run_2, run_3, etc.
+RUN_ID = "run_21"  # <-- change to run_2, run_3, etc.
 
-NUM_TREES = NUM_TREES         
+NUM_TREES = NUM_TREES
 NUM_TARGETS = 1
 NUM_SENSORS = 8
 SENSOR_RANGE = 5.0
 CONTEXT_LENGTH = 1
-N_STACK = N_STACK      
+N_STACK = N_STACK
 
 # =========================
 # Helpers
@@ -34,12 +34,15 @@ def resolve_model_path(log_dir: str, run_id: str) -> str:
     raise FileNotFoundError(f"Could not find model at {base}(.zip)")
 
 def make_env():
+    """Create env with the SAME settings and wrappers as training."""
     env = QuadXForestEnv(
         render_mode="human",
         num_trees=NUM_TREES,
         num_targets=NUM_TARGETS,
         num_sensors=NUM_SENSORS,
         sensor_range=SENSOR_RANGE,
+        max_duration_seconds=30.0,
+        flight_dome_size=12.0,
     )
     env = FlattenWaypointEnv(env, context_length=CONTEXT_LENGTH)
     return env
@@ -82,13 +85,17 @@ if __name__ == "__main__":
     try:
         while True:
             action, _ = model.predict(obs, deterministic=True)
-            obs, reward, done, info = env.step(action)
-            if done:
+            obs, rewards, dones, infos = env.step(action)
+            # DummyVecEnv has a single env, so index 0
+            if dones[0]:
                 obs = env.reset()
     except KeyboardInterrupt:
         print("\nExiting visualization.")
     finally:
-        env.close()
+        try:
+            env.close()
+        except Exception as e:
+            print(f"Env close failed (ignoring): {e}")
 
 
 # # import gymnasium as gym
@@ -116,7 +123,7 @@ if __name__ == "__main__":
 # # while True:
 # #     action, _ = model.predict(obs, deterministic=True)
 # #     obs, reward, terminated, truncated, info = env.step(action)
-    
+
 # #     if terminated or truncated:
 # #         obs, _ = env.reset()
 # import gymnasium as gym
@@ -145,7 +152,7 @@ if __name__ == "__main__":
 # env = VecFrameStack(env, n_stack=4)  # <--- MISSING: Model was trained with frame stacking
 
 # # Try to load VecNormalize stats if they exist
-# vecnormalize_path = f"./logs/{EXP_NAME}/{RUN_ID}/final_model_{RUN_ID}.pkl"  
+# vecnormalize_path = f"./logs/{EXP_NAME}/{RUN_ID}/final_model_{RUN_ID}.pkl"
 # if os.path.exists(vecnormalize_path):
 #     print(f"Loading VecNormalize stats from {vecnormalize_path}")
 #     env = VecNormalize.load(vecnormalize_path, env)
@@ -169,6 +176,6 @@ if __name__ == "__main__":
 # while True:
 #     action, _ = model.predict(obs, deterministic=True)
 #     obs, reward, done, info = env.step(action)
-    
-#     if done:  
+
+#     if done:
 #         obs = env.reset()
