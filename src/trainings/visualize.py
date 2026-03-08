@@ -10,7 +10,7 @@ from train import NUM_TREES, N_STACK, EXP_NAME
 # CONFIG
 # =========================
 EXP_NAME = EXP_NAME
-RUN_ID = "run_6"  # <-- change to run_2, run_3, etc.
+RUN_ID = "run_2"  # <-- change to run_2, run_3, etc.
 
 NUM_TREES = NUM_TREES         
 NUM_TARGETS = 1
