@@ -22,7 +22,7 @@ os.environ["IMAGEIO_FFMPEG_EXE"] = imageio_ffmpeg.get_ffmpeg_exe()
 # --------------Hyperparameters for Training---------------
 NUM_ENVS = 8
 NUM_SENSORS = 8
-NUM_TREES = 5
+NUM_TREES = 15
 TOTAL_TIMESTEPS = 1_000_000
 N_STEPS = 2048
 BATCH_SIZE = 1024
@@ -42,7 +42,7 @@ N_STACK = 2
 
 # If START_FROM_RUN is not None, we will create a NEW run_N directory and initialize it from
 # a checkpoint in START_FROM_RUN (optionally at START_FROM_STEPS).
-START_FROM_RUN = None          # e.g. "run_1" or None
+START_FROM_RUN = "run_1"       # e.g. "run_1" or None
 START_FROM_STEPS =  None       # e.g. 100000 (int) or None -> uses latest checkpoint in START_FROM_RUN
 COPY_VECNORM_ON_FORK = True
 
@@ -105,7 +105,8 @@ def make_env():
         num_sensors=NUM_SENSORS,
         sensor_range=5.0,
         max_duration_seconds=30.0,
-        flight_dome_size=12.0
+        flight_dome_size=12.0,
+        goal_reach_distance=0.5 # CHANGED
     )
     return FlattenWaypointEnv(env, context_length=1)
 
