@@ -8,15 +8,15 @@ import pybullet as p
 
 
 DISTANCE_PROGRESS_MAX_REWARD_PER_STEP = 10.0
-VELOCITY_TOWARD_GOAL_MAX_REWARD_PER_STEP = 1.0
+VELOCITY_TOWARD_GOAL_MAX_REWARD_PER_STEP = 2.0
 
-REWARD_PROXIMITY_MAX = 0
-REWARD_PROXIMITY_BASE = 0
+REWARD_PROXIMITY_MAX = 12.0
+REWARD_PROXIMITY_BASE = 5.0
 
-GROUND_AVOIDANCE_SCALE = 15.0
-FLOOR_CRASH_PENALTY = 100.0
+GROUND_AVOIDANCE_SCALE = 10.0
+FLOOR_CRASH_PENALTY = 50.0
 
-HEIGHT_PENALTY_SCALE = 1.0
+HEIGHT_PENALTY_SCALE = 0.5
 
 WAYPOINT_REWARD_BONUS = 100.0
 TREE_PROX_PENALTY_WEIGHT = 3.0
@@ -415,7 +415,7 @@ class QuadXForestEnv(QuadXWaypointsEnv):
 
         # reward progress toward goal
         progress = self.previous_distance - current_distance
-        distance_progress_reward = 10.0 * np.clip(progress, -0.5, 0.5)
+        distance_progress_reward = DISTANCE_PROGRESS_MAX_REWARD_PER_STEP * np.clip(progress, -0.5, 0.5)
         self.reward += distance_progress_reward
         self.previous_distance = current_distance
 
@@ -423,22 +423,25 @@ class QuadXForestEnv(QuadXWaypointsEnv):
         goal_direction = goal_pos - lin_pos
         goal_direction_norm = goal_direction / (np.linalg.norm(goal_direction) + 1e-8)
         speed_toward_goal = np.dot(velocity, goal_direction_norm)
-        velocity_toward_goal_reward = 2.0 * np.clip(speed_toward_goal, -2.0, 2.0)
+        velocity_toward_goal_reward = VELOCITY_TOWARD_GOAL_MAX_REWARD_PER_STEP * np.clip(speed_toward_goal, -2.0, 2.0)
         self.reward += velocity_toward_goal_reward
 
         # reward proximity to goal
-        proximity_reward = min(5.0 / (current_distance + 0.1), 12.0)
+        proximity_reward = min(
+            REWARD_PROXIMITY_BASE / (current_distance + 0.1),
+            REWARD_PROXIMITY_MAX,
+        )
         self.reward += proximity_reward
 
         # penalty to prevent drone from flying straight into ground
         current_height = lin_pos[2]
         if current_height < 0.5:
-            ground_avoidance_penalty = 10.0 * (0.5 - current_height)
+            ground_avoidance_penalty = GROUND_AVOIDANCE_SCALE * (0.5 - current_height)
             self.reward -= ground_avoidance_penalty
 
         # terminate episode if drone hits the floor
         if current_height < 0.15:
-            floor_collision_penalty = 50.0
+            floor_collision_penalty = FLOOR_CRASH_PENALTY
             self.reward -= floor_collision_penalty
             self.termination = True
             self.info["floor_crash"] = True
@@ -460,7 +463,7 @@ class QuadXForestEnv(QuadXWaypointsEnv):
         # height penalty if drone flies too high
         goal_height = goal_pos[2]
         if current_height > goal_height + 4.0:
-            height_penalty = 0.5 * (current_height - goal_height - 4.0)
+            height_penalty = HEIGHT_PENALTY_SCALE * (current_height - goal_height - 4.0)
             self.reward -= height_penalty
 
         # time penalty
@@ -500,7 +503,7 @@ class QuadXForestEnv(QuadXWaypointsEnv):
 
         # waypoint reached
         if self.waypoints.target_reached:
-            self.reward += 100.0
+            self.reward += WAYPOINT_REWARD_BONUS
             self.waypoints.advance_targets()
             if self.waypoints.all_targets_reached:
                 self.truncation = True
