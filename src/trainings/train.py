@@ -234,8 +234,10 @@ if __name__ == "__main__":
         config=config,
         sync_tensorboard=True,
     )
-    # SB3 writes to log_dir; wandb syncs TB from the run dir when sync_tensorboard=True.
-    # To have TB logs show in wandb, we point tensorboard_log at the wandb run dir below.
+    # TensorBoard path for wandb: SB3 writes events here; wandb syncs this dir when sync_tensorboard=True.
+    # Use absolute path so it's correct regardless of CWD (e.g. on cluster).
+    tb_log_dir = os.path.abspath(wandb.run.dir)
+    print(f"TensorBoard log dir (for wandb): {tb_log_dir}")
 
     # ----- Build base env + wrappers that must always match -----
     env = make_vec_env(make_env, n_envs=NUM_ENVS, vec_env_cls=SubprocVecEnv)
