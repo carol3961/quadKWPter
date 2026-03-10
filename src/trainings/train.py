@@ -6,12 +6,26 @@ from stable_baselines3.common.env_util import make_vec_env
 from stable_baselines3.common.vec_env import SubprocVecEnv, VecNormalize, VecFrameStack
 from stable_baselines3.common.callbacks import CheckpointCallback, CallbackList, BaseCallback
 from PyFlyt.gym_envs import FlattenWaypointEnv
-from quadx_forest_env import QuadXForestEnv
 import imageio_ffmpeg
 from tensorboard_video_recorder import TensorboardVideoRecorder
 from wandb.integration.sb3 import WandbCallback
 import wandb
 import numpy as np
+
+from quadx_forest_env import (
+    QuadXForestEnv,
+    DISTANCE_PROGRESS_MAX_REWARD_PER_STEP,
+    VELOCITY_TOWARD_GOAL_MAX_REWARD_PER_STEP,
+    REWARD_PROXIMITY_MAX,
+    REWARD_PROXIMITY_BASE,
+    GROUND_AVOIDANCE_SCALE,
+    FLOOR_CRASH_PENALTY,
+    HEIGHT_PENALTY_SCALE,
+    WAYPOINT_REWARD_BONUS,
+    TREE_PROX_PENALTY_WEIGHT,
+    TIME_STEP_PENALTY,
+    TREE_COLLISION_PENALTY,
+)
 
 os.environ["IMAGEIO_FFMPEG_EXE"] = imageio_ffmpeg.get_ffmpeg_exe()
 
@@ -35,7 +49,7 @@ ENT_COEF = 0.1
 # If True: resumes the most recent run_N (keeps training inside that same run folder).
 # If False: starts a brand new run_(N+1) folder (unless forking, see below).
 RESUME_LATEST_RUN = False
-EXP_NAME = "forest_obstacle_avoidance_v7"
+EXP_NAME = "forest_obstacle_avoidance_v10"
 # EXP_NAME = "test"
 CHECKPOINT_SAVE_FREQ = 50_000
 N_STACK = 2
@@ -245,6 +259,19 @@ if __name__ == "__main__":
         "n_stack": N_STACK,
         "exp_name": EXP_NAME,
         "run_id": run_id,
+
+        # reward / penalty settings
+        "distance_progress_weight": DISTANCE_PROGRESS_MAX_REWARD_PER_STEP,
+        "velocity_toward_goal_weight": VELOCITY_TOWARD_GOAL_MAX_REWARD_PER_STEP,
+        "reward_proximity_max": REWARD_PROXIMITY_MAX,
+        "reward_proximity_base": REWARD_PROXIMITY_BASE,
+        "ground_avoidance_scale": GROUND_AVOIDANCE_SCALE,
+        "floor_crash_penalty": FLOOR_CRASH_PENALTY,
+        "height_penalty_scale": HEIGHT_PENALTY_SCALE,
+        "waypoint_reward_bonus": WAYPOINT_REWARD_BONUS,
+        "tree_proximity_penalty_weight": TREE_PROX_PENALTY_WEIGHT,
+        "time_step_penalty": TIME_STEP_PENALTY,
+        "tree_collision_penalty": TREE_COLLISION_PENALTY,
     }
     wandb.init(
         project="quadx-forest-obstacle-avoidance",
