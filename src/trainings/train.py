@@ -35,14 +35,14 @@ ENT_COEF = 0.1
 # If True: resumes the most recent run_N (keeps training inside that same run folder).
 # If False: starts a brand new run_(N+1) folder (unless forking, see below).
 RESUME_LATEST_RUN = False
-EXP_NAME = "forest_obstacle_avoidance_v5"
+EXP_NAME = "forest_obstacle_avoidance_v7"
 # EXP_NAME = "test"
 CHECKPOINT_SAVE_FREQ = 50_000
 N_STACK = 2
 
 # If START_FROM_RUN is not None, we will create a NEW run_N directory and initialize it from
 # a checkpoint in START_FROM_RUN (optionally at START_FROM_STEPS).
-START_FROM_RUN = "run_1"       # e.g. "run_1" or None
+START_FROM_RUN = None       # e.g. "run_1" or None
 START_FROM_STEPS =  None       # e.g. 100000 (int) or None -> uses latest checkpoint in START_FROM_RUN
 COPY_VECNORM_ON_FORK = True
 
@@ -112,7 +112,7 @@ def make_env():
 
 
 class ForestEnvWandbCallback(BaseCallback):
-    """Logs env-specific metrics to wandb for clear graphs (rewards, targets reached, collision)."""
+    """Logs env-specific metrics to wandb: targets reached, tree/ground collisions, timeouts, failures, time to target."""
 
     def __init__(self, log_freq: int = 1, verbose: int = 0):
         super().__init__(verbose)
@@ -120,9 +120,15 @@ class ForestEnvWandbCallback(BaseCallback):
         self.episode_rewards: list[float] = []
         self.episode_lengths: list[int] = []
         self.num_targets_reached: list[int] = []
-        self.collisions: list[int] = []
         self.env_complete: list[int] = []
-        self.episodes_ended: int = 0  # any episode end in this rollout
+        self.episodes_ended: int = 0
+        # Failure / outcome counts per ended episode
+        self.tree_collisions: list[int] = []
+        self.ground_collisions: list[int] = []
+        self.timeouts: list[int] = []
+        self.out_of_bounds: list[int] = []
+        # Time (steps) to reach target when episode ended with goal
+        self.time_to_reach_target_steps: list[int] = []
 
     def _on_step(self) -> bool:
         infos = self.locals.get("infos", [])
@@ -130,48 +136,61 @@ class ForestEnvWandbCallback(BaseCallback):
         if not infos:
             return True
         for i, info in enumerate(infos):
-            # When episode ends (Gymnasium often adds "episode" key)
+            if not (i < len(dones) and dones[i]) and "episode" not in info:
+                continue
+            self.episodes_ended += 1
             if "episode" in info:
                 self.episode_rewards.append(info["episode"]["r"])
                 self.episode_lengths.append(info["episode"].get("l", 0))
-            # Record env-specific stats on episode end (use done flag if no "episode" key)
-            if (i < len(dones) and dones[i]) or "episode" in info:
-                self.episodes_ended += 1
-                if "num_targets_reached" in info:
-                    self.num_targets_reached.append(info["num_targets_reached"])
-                if info.get("collision"):
-                    self.collisions.append(1)
-                if info.get("env_complete"):
-                    self.env_complete.append(1)
+            if "num_targets_reached" in info:
+                self.num_targets_reached.append(info["num_targets_reached"])
+            if info.get("env_complete"):
+                self.env_complete.append(1)
+                if "episode" in info:
+                    self.time_to_reach_target_steps.append(info["episode"].get("l", 0))
+            if info.get("tree_collision"):
+                self.tree_collisions.append(1)
+            if info.get("collision") and not info.get("tree_collision"):
+                self.ground_collisions.append(1)
+            if info.get("episode_timeout"):
+                self.timeouts.append(1)
+            if info.get("out_of_bounds"):
+                self.out_of_bounds.append(1)
         return True
 
     def _on_rollout_end(self) -> None:
         if self.n_calls % self.log_freq != 0:
             return
-        log_dict = {}
-        if self.episode_rewards:
-            log_dict["env/episode_reward_mean"] = np.mean(self.episode_rewards)
-            log_dict["env/episode_reward_std"] = np.std(self.episode_rewards)
-            log_dict["env/episode_length_mean"] = np.mean(self.episode_lengths)
-            self.episode_rewards.clear()
-            self.episode_lengths.clear()
-        if self.num_targets_reached:
-            log_dict["env/num_targets_reached_mean"] = np.mean(self.num_targets_reached)
-            self.num_targets_reached.clear()
-        if self.collisions:
-            log_dict["env/collision_count"] = sum(self.collisions)
-            self.collisions.clear()
-        if self.env_complete:
-            # Total episodes (across all 8 envs) that ended with goal reached this rollout
-            goal_count = sum(self.env_complete)
-            log_dict["env/goal_reached_per_rollout"] = goal_count
-            if self.episodes_ended > 0:
-                # Fraction of ended episodes that reached the goal (0–1, easy to read)
-                log_dict["env/goal_reached_rate"] = goal_count / self.episodes_ended
-            self.env_complete.clear()
+        goal_count = sum(self.env_complete)
+
+        log_dict = {
+            "env/episode_reward_mean": float(np.mean(self.episode_rewards)) if self.episode_rewards else 0.0,
+            "env/episode_reward_std": float(np.std(self.episode_rewards)) if self.episode_rewards else 0.0,
+            "env/episode_length_mean": float(np.mean(self.episode_lengths)) if self.episode_lengths else 0.0,
+            "env/num_targets_reached_mean": float(np.mean(self.num_targets_reached)) if self.num_targets_reached else 0.0,
+            "env/goal_reached_per_rollout": goal_count,
+            "env/goal_reached_rate": (goal_count / self.episodes_ended) if self.episodes_ended > 0 else 0.0,
+            "env/time_to_reach_target_steps_mean": float(np.mean(self.time_to_reach_target_steps)) if self.time_to_reach_target_steps else 0.0,
+            "env/tree_collision_count": sum(self.tree_collisions),
+            "env/ground_collision_count": sum(self.ground_collisions),
+            "env/timeout_count": sum(self.timeouts),
+            "env/out_of_bounds_count": sum(self.out_of_bounds),
+            "env/episodes_ended_this_rollout": self.episodes_ended,
+        }
+
+        wandb.log(log_dict)
+
+        self.episode_rewards.clear()
+        self.episode_lengths.clear()
+        self.num_targets_reached.clear()
+        self.env_complete.clear()
+        self.time_to_reach_target_steps.clear()
+        self.tree_collisions.clear()
+        self.ground_collisions.clear()
+        self.timeouts.clear()
+        self.out_of_bounds.clear()
         self.episodes_ended = 0
-        if log_dict:
-            wandb.log(log_dict, step=self.num_timesteps)
+
 
 # =========================
 # MAIN
@@ -230,8 +249,8 @@ if __name__ == "__main__":
     wandb.init(
         project="quadx-forest-obstacle-avoidance",
         entity="nperroch-uci",
-        name=f"forest_obstacle_avoidance_v5_{run_id}",
-        tags=["forest_obstacle_avoidance_v5", run_id],
+        name=f"{EXP_NAME}_{run_id}",
+        tags=[f"{EXP_NAME}", run_id],
         config=config,
         sync_tensorboard=True,
     )

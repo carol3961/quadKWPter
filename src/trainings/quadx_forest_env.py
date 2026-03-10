@@ -102,7 +102,7 @@ class QuadXForestEnv(QuadXWaypointsEnv):
         )
 
     def reset(
-        self, *, seed: None | int = None, options: None | dict[str, Any] = dict()
+        self, *, seed: None | int = None, options: None | dict[str, Any] = None
     ) -> tuple[dict[Literal["attitude", "target_deltas", "obstacle_distances"], np.ndarray], dict]:
         """Resets the environment with trees and custom spawn positions"""
 
@@ -138,6 +138,8 @@ class QuadXForestEnv(QuadXWaypointsEnv):
         self.previous_distance = np.linalg.norm(self.start_pos[0] - desired_goal)
 
         self.info["num_targets_reached"] = 0
+        self.info["tree_collision"] = False
+        self.info["episode_timeout"] = False
         QuadXBaseEnv.end_reset(self)
 
         return self.state, self.info
@@ -186,44 +188,48 @@ class QuadXForestEnv(QuadXWaypointsEnv):
 
         return distances
 
-    def compute_term_trunc_reward(self) -> None:
-        """Custom reward and termination: waypoints + distance shaping + tree collision + obstacle proximity."""
-        # Base (ground, bounds) + waypoints (progress, target reached)
-        super().compute_term_trunc_reward()
-        # If base already terminated (e.g. ground hit, out of bounds), don't overwrite
-        if self.termination or self.truncation:
-            return
-        # Tree collision: big penalty and terminate
-        if self._check_tree_collision():
-            self.reward = -100.0
-            self.info["collision"] = True
-            self.termination |= True
-            return
-        # Obstacle proximity: penalty so the agent learns to stay away from trees
-        if hasattr(self, "state") and "obstacle_distances" in self.state:
-            min_dist = np.min(self.state["obstacle_distances"])
-            danger_radius = 3.0
-            if min_dist < danger_radius:
-                normalized = min_dist / danger_radius
-                self.reward -= 3.0 * (1.0 - normalized) ** 2
-        # Distance-based shaping: reward getting closer, penalize moving away
-        # Use the current waypoint target (same one the parent env uses)
-        _, _, _, lin_pos, _ = self.compute_attitude()
-        lin_pos = np.asarray(lin_pos).reshape(-1)[:3]
-        goal_pos = np.asarray(self.waypoints.targets[0]).reshape(-1)[:3]
-        delta = goal_pos - lin_pos
-        delta[2] *= 2.0  # make vertical error count 2×
-        dist = float(np.linalg.norm(delta))
-        # Initialize previous_distance on first call if needed
-        if not hasattr(self, "previous_distance"):
-            self.previous_distance = dist
-        progress = self.previous_distance - dist  # >0 if we moved closer, <0 if we moved away
-        self.previous_distance = dist
-        # Scale: positive reward when closer, increasing penalty when farther away
-        if progress > 0:
-            self.reward += 5.0 * 1 / dist
-        else:
-            self.reward -= 5.0 * 1 / dist
+    # def compute_term_trunc_reward(self) -> None:
+    #     """Custom reward and termination: waypoints + distance shaping + tree collision + obstacle proximity."""
+    #     # Base (ground, bounds) + waypoints (progress, target reached)
+    #     super().compute_term_trunc_reward()
+    #     # If base already terminated (e.g. ground hit, out of bounds), don't overwrite
+    #     if self.termination or self.truncation:
+    #         return
+    #     # Tree collision: big penalty and terminate
+    #     if self._check_tree_collision():
+    #         self.reward = -100.0
+    #         self.info["collision"] = True
+    #         self.info["tree_collision"] = True
+    #         self.termination |= True
+    #         return
+    #     # Mark timeout when episode ends due to max steps (truncation, no termination, goal not reached)
+    #     if self.truncation and not self.termination and not self.info.get("env_complete"):
+    #         self.info["episode_timeout"] = True
+    #     # Obstacle proximity: penalty so the agent learns to stay away from trees
+    #     if hasattr(self, "state") and "obstacle_distances" in self.state:
+    #         min_dist = np.min(self.state["obstacle_distances"])
+    #         danger_radius = 3.0
+    #         if min_dist < danger_radius:
+    #             normalized = min_dist / danger_radius
+    #             self.reward -= 3.0 * (1.0 - normalized) ** 2
+    #     # Distance-based shaping: reward getting closer, penalize moving away
+    #     # Use the current waypoint target (same one the parent env uses)
+    #     _, _, _, lin_pos, _ = self.compute_attitude()
+    #     lin_pos = np.asarray(lin_pos).reshape(-1)[:3]
+    #     goal_pos = np.asarray(self.waypoints.targets[0]).reshape(-1)[:3]
+    #     delta = goal_pos - lin_pos
+    #     delta[2] *= 2.0  # make vertical error count 2×
+    #     dist = float(np.linalg.norm(delta))
+    #     # Initialize previous_distance on first call if needed
+    #     if not hasattr(self, "previous_distance"):
+    #         self.previous_distance = dist
+    #     progress = self.previous_distance - dist  # >0 if we moved closer, <0 if we moved away
+    #     self.previous_distance = dist
+    #     # Scale: positive reward when closer, increasing penalty when farther away
+    #     if progress > 0:
+    #         self.reward += 5.0 * 1 / dist
+    #     else:
+    #         self.reward -= 5.0 * 1 / dist
 
     def _check_tree_collision(self) -> bool:
         """Check if drone has collided with any tree"""
@@ -334,7 +340,6 @@ class QuadXForestEnv(QuadXWaypointsEnv):
                 'height': height
             })
 
-        attempts += 1
 
     def render(self):
         """Third-person chase camera render"""
@@ -388,6 +393,9 @@ class QuadXForestEnv(QuadXWaypointsEnv):
     def compute_term_trunc_reward(self) -> None:
         """Compute reward with goal-seeking and obstacle avoidance"""
         super().compute_term_trunc_reward()
+
+        if self.truncation and not self.termination and not self.info.get("env_complete", False):
+            self.info["episode_timeout"] = True
 
         if self.termination or self.truncation:
             return
@@ -464,4 +472,6 @@ class QuadXForestEnv(QuadXWaypointsEnv):
         if self.waypoints.target_reached:
             self.reward += 100.0
             self.waypoints.advance_targets()
-            self.truncation |= self.waypoints.all_targets_reached
+            if self.waypoints.all_targets_reached:
+                self.truncation = True
+                self.info["env_complete"] = True
