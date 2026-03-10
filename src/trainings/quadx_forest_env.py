@@ -7,19 +7,20 @@ import os
 import pybullet as p
 
 
-DISTANCE_PROGRESS_MAX_REWARD_PER_STEP = 5.0
-VELOCITY_TOWARD_GOAL_MAX_REWARD_PER_STEP = 4.0
+DISTANCE_PROGRESS_MAX_REWARD_PER_STEP = 10.0
+VELOCITY_TOWARD_GOAL_MAX_REWARD_PER_STEP = 1.0
 
-REWARD_PROXIMITY_MAX = 12.0
-REWARD_PROXIMITY_BASE = 5.0
+REWARD_PROXIMITY_MAX = 3.0
+REWARD_PROXIMITY_BASE = 1.0
 
-GROUND_AVOIDANCE_SCALE = 10.0
-FLOOR_CRASH_PENALTY = 50.0
+GROUND_AVOIDANCE_SCALE = 15.0
+FLOOR_CRASH_PENALTY = 100.0
 
-HEIGHT_PENALTY_SCALE = 0.5
+HEIGHT_PENALTY_SCALE = 1.0
 
 WAYPOINT_REWARD_BONUS = 100.0
-
+TREE_PROX_PENALTY_WEIGHT = 3.0
+TIME_STEP_PENALTY = 0.2
 
 class QuadXForestEnv(QuadXWaypointsEnv):
     """QuadX Waypoints Environment with trees and obstacle detection"""
@@ -375,6 +376,7 @@ class QuadXForestEnv(QuadXWaypointsEnv):
         time_penalty = 0.0
         tree_collision_penalty = 0.0
         obstacle_proximity_penalty = 0.0
+        floor_collision_penalty = 0.0
 
         if self.truncation and not self.termination and not self.info.get("env_complete", False):
             self.info["episode_timeout"] = True
@@ -410,17 +412,17 @@ class QuadXForestEnv(QuadXWaypointsEnv):
 
         velocity = np.array(lin_vel).flatten()
 
-        # reward progress toward goal (scaled without clipping)
+        # reward progress toward goal
         progress = self.previous_distance - current_distance
         distance_progress_reward = DISTANCE_PROGRESS_MAX_REWARD_PER_STEP * progress
         self.reward += distance_progress_reward
         self.previous_distance = current_distance
 
-        # reward velocity toward goal (scaled without clipping)
+        # reward velocity toward goal
         goal_direction = goal_pos - lin_pos
         goal_direction_norm = goal_direction / (np.linalg.norm(goal_direction) + 1e-8)
         speed_toward_goal = np.dot(velocity, goal_direction_norm)
-        velocity_toward_goal_reward = VELOCITY_TOWARD_GOAL_MAX_REWARD_PER_STEP * speed_toward_goal
+        velocity_toward_goal_reward = VELOCITY_TOWARD_GOAL_MAX_REWARD_PER_STEP * np.clip(speed_toward_goal, -1.0, 1.0)
         self.reward += velocity_toward_goal_reward
 
         # reward proximity to goal
@@ -437,8 +439,8 @@ class QuadXForestEnv(QuadXWaypointsEnv):
 
         # terminate episode if drone hits the floor
         if current_height < 0.15:
-            tree_collision_penalty = FLOOR_CRASH_PENALTY
-            self.reward -= tree_collision_penalty
+            floor_collision_penalty = FLOOR_CRASH_PENALTY
+            self.reward -= floor_collision_penalty
             self.termination = True
             self.info["floor_crash"] = True
             # Log reward components before returning
@@ -451,6 +453,7 @@ class QuadXForestEnv(QuadXWaypointsEnv):
             self.info["reward_height_penalty"] = tree_height_penalty
             self.info["reward_time_penalty"] = time_penalty
             self.info["reward_tree_collision_penalty"] = tree_collision_penalty
+            self.info["reward_floor_collision_penalty"] = floor_collision_penalty
             self.info["reward_obstacle_proximity_penalty"] = obstacle_proximity_penalty
             return
 
