@@ -10,8 +10,8 @@ import pybullet as p
 DISTANCE_PROGRESS_MAX_REWARD_PER_STEP = 10.0
 VELOCITY_TOWARD_GOAL_MAX_REWARD_PER_STEP = 1.0
 
-REWARD_PROXIMITY_MAX = 3.0
-REWARD_PROXIMITY_BASE = 1.0
+REWARD_PROXIMITY_MAX = 0
+REWARD_PROXIMITY_BASE = 0
 
 GROUND_AVOIDANCE_SCALE = 15.0
 FLOOR_CRASH_PENALTY = 100.0
@@ -21,6 +21,7 @@ HEIGHT_PENALTY_SCALE = 1.0
 WAYPOINT_REWARD_BONUS = 100.0
 TREE_PROX_PENALTY_WEIGHT = 3.0
 TIME_STEP_PENALTY = 0.2
+TREE_COLLISION_PENALTY = 100.0
 
 class QuadXForestEnv(QuadXWaypointsEnv):
     """QuadX Waypoints Environment with trees and obstacle detection"""
@@ -44,14 +45,14 @@ class QuadXForestEnv(QuadXWaypointsEnv):
         tree_radius_range: tuple[float, float] = (0.1, 0.3),
         tree_height_range: tuple[float, float] = (1.0, 2.0),
         tree_mesh_dir_path: str = os.path.join(os.getcwd(), "gazebo_pine_tree_model", "meshes"),
-        tree_collision_penalty: float = 100.0,
-        tree_proximity_penalty_weight: float = 0.5,
+        tree_collision_penalty: float = TREE_COLLISION_PENALTY,
+        tree_proximity_penalty_weight: float = TREE_PROX_PENALTY_WEIGHT,
         goal_area: dict = None,
         # Sensor parameters
         num_sensors: int = 8,
         sensor_range: float = 5.0,
         # Time penalty
-        time_step_penalty: float = 0.1,
+        time_step_penalty: float = TIME_STEP_PENALTY,
     ):
         self.tree_positions = []
         self.num_trees = num_trees
@@ -393,6 +394,7 @@ class QuadXForestEnv(QuadXWaypointsEnv):
             self.info["reward_time_penalty"] = time_penalty
             self.info["reward_tree_collision_penalty"] = tree_collision_penalty
             self.info["reward_obstacle_proximity_penalty"] = obstacle_proximity_penalty
+            self.info["reward_floor_collision_penalty"] = floor_collision_penalty
             return
 
         if len(self.waypoints.targets) == 0:
@@ -403,8 +405,6 @@ class QuadXForestEnv(QuadXWaypointsEnv):
         ang_vel, ang_pos, lin_vel, lin_pos, quaternion = self.compute_attitude()
         goal_pos = self.waypoints.targets[0]
 
-        horizontal_dist = np.linalg.norm(lin_pos[:2] - goal_pos[:2])
-        vertical_dist = abs(lin_pos[2] - goal_pos[2])
         current_distance = np.linalg.norm(lin_pos - goal_pos)
 
         if not hasattr(self, 'previous_distance'):
@@ -440,9 +440,10 @@ class QuadXForestEnv(QuadXWaypointsEnv):
         # terminate episode if drone hits the floor
         if current_height < 0.15:
             floor_collision_penalty = FLOOR_CRASH_PENALTY
-            self.reward -= floor_collision_penalty
+            self.reward = -floor_collision_penalty
             self.termination = True
             self.info["floor_crash"] = True
+            self.info["collision"] = True
             # Log reward components before returning
             self.info["reward_total"] = float(self.reward)
             self.info["reward_base"] = base_reward
@@ -487,6 +488,7 @@ class QuadXForestEnv(QuadXWaypointsEnv):
             self.info["reward_time_penalty"] = time_penalty
             self.info["reward_tree_collision_penalty"] = tree_collision_penalty
             self.info["reward_obstacle_proximity_penalty"] = obstacle_proximity_penalty
+            self.info["reward_floor_collision_penalty"] = floor_collision_penalty
             return
 
         # penalty if drone gets too close to obstacle
@@ -519,3 +521,4 @@ class QuadXForestEnv(QuadXWaypointsEnv):
         self.info["reward_time_penalty"] = time_penalty
         self.info["reward_tree_collision_penalty"] = tree_collision_penalty
         self.info["reward_obstacle_proximity_penalty"] = obstacle_proximity_penalty
+        self.info["reward_floor_collision_penalty"] = floor_collision_penalty
