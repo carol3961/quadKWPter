@@ -234,8 +234,10 @@ if __name__ == "__main__":
         config=config,
         sync_tensorboard=True,
     )
-    # SB3 writes to log_dir; wandb syncs TB from the run dir when sync_tensorboard=True.
-    # To have TB logs show in wandb, we point tensorboard_log at the wandb run dir below.
+    # TensorBoard path for wandb: SB3 writes events here; wandb syncs this dir when sync_tensorboard=True.
+    # Use absolute path so it's correct regardless of CWD (e.g. on cluster).
+    tb_log_dir = os.path.abspath(wandb.run.dir)
+    print(f"TensorBoard log dir (for wandb): {tb_log_dir}")
 
     # ----- Build base env + wrappers that must always match -----
     env = make_vec_env(make_env, n_envs=NUM_ENVS, vec_env_cls=SubprocVecEnv)
@@ -292,7 +294,7 @@ if __name__ == "__main__":
             print(f"✓ Copied VecNormalize stats into new run: {vecnorm_path}")
 
         # Load model from the chosen source checkpoint
-        model = PPO.load(source_ckpt, env=env, tensorboard_log=wandb.run.dir)
+        model = PPO.load(source_ckpt, env=env, tensorboard_log=tb_log_dir)
         reset_timesteps = False
 
     else:
@@ -311,7 +313,7 @@ if __name__ == "__main__":
 
         if load_path:
             print(f"✓ Resuming from checkpoint: {load_path}")
-            model = PPO.load(load_path, env=env, tensorboard_log=wandb.run.dir)
+            model = PPO.load(load_path, env=env, tensorboard_log=tb_log_dir)
             reset_timesteps = False
         else:
             print("✗ No checkpoint found in this run. Starting PPO fresh.")
@@ -319,7 +321,7 @@ if __name__ == "__main__":
                 "MlpPolicy",
                 env,
                 verbose=0,
-                tensorboard_log=wandb.run.dir,
+                tensorboard_log=tb_log_dir,
                 n_steps=N_STEPS,
                 batch_size=BATCH_SIZE,
                 learning_rate=LEARNING_RATE,
