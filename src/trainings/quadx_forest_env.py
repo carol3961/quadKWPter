@@ -364,16 +364,18 @@ class QuadXForestEnv(QuadXWaypointsEnv):
 
 
     def compute_term_trunc_reward(self) -> None:
-        """Compute reward with goal-seeking and obstacle avoidance"""
+        """Compute reward with goal-seeking and obstacle avoidance, with reward-component logging."""
         super().compute_term_trunc_reward()
 
-        # Initialize per-step reward breakdown
+        # Base reward from parent env
         base_reward = float(getattr(self, "reward", 0.0))
+
+        # Initialize reward breakdown
         distance_progress_reward = 0.0
         velocity_toward_goal_reward = 0.0
         proximity_reward = 0.0
         ground_avoidance_penalty = 0.0
-        tree_height_penalty = 0.0
+        height_penalty = 0.0
         time_penalty = 0.0
         tree_collision_penalty = 0.0
         obstacle_proximity_penalty = 0.0
@@ -383,18 +385,17 @@ class QuadXForestEnv(QuadXWaypointsEnv):
             self.info["episode_timeout"] = True
 
         if self.termination or self.truncation:
-            # Log final reward components at end of step
             self.info["reward_total"] = float(self.reward)
             self.info["reward_base"] = base_reward
             self.info["reward_distance_progress"] = distance_progress_reward
             self.info["reward_velocity_toward_goal"] = velocity_toward_goal_reward
             self.info["reward_goal_proximity"] = proximity_reward
             self.info["reward_ground_avoidance_penalty"] = ground_avoidance_penalty
-            self.info["reward_height_penalty"] = tree_height_penalty
+            self.info["reward_height_penalty"] = height_penalty
             self.info["reward_time_penalty"] = time_penalty
             self.info["reward_tree_collision_penalty"] = tree_collision_penalty
-            self.info["reward_obstacle_proximity_penalty"] = obstacle_proximity_penalty
             self.info["reward_floor_collision_penalty"] = floor_collision_penalty
+            self.info["reward_obstacle_proximity_penalty"] = obstacle_proximity_penalty
             return
 
         if len(self.waypoints.targets) == 0:
@@ -407,14 +408,14 @@ class QuadXForestEnv(QuadXWaypointsEnv):
 
         current_distance = np.linalg.norm(lin_pos - goal_pos)
 
-        if not hasattr(self, 'previous_distance'):
+        if not hasattr(self, "previous_distance"):
             self.previous_distance = current_distance
 
         velocity = np.array(lin_vel).flatten()
 
         # reward progress toward goal
         progress = self.previous_distance - current_distance
-        distance_progress_reward = DISTANCE_PROGRESS_MAX_REWARD_PER_STEP * progress
+        distance_progress_reward = 10.0 * np.clip(progress, -0.5, 0.5)
         self.reward += distance_progress_reward
         self.previous_distance = current_distance
 
@@ -422,36 +423,34 @@ class QuadXForestEnv(QuadXWaypointsEnv):
         goal_direction = goal_pos - lin_pos
         goal_direction_norm = goal_direction / (np.linalg.norm(goal_direction) + 1e-8)
         speed_toward_goal = np.dot(velocity, goal_direction_norm)
-        velocity_toward_goal_reward = VELOCITY_TOWARD_GOAL_MAX_REWARD_PER_STEP * np.clip(speed_toward_goal, -1.0, 1.0)
+        velocity_toward_goal_reward = 2.0 * np.clip(speed_toward_goal, -2.0, 2.0)
         self.reward += velocity_toward_goal_reward
 
         # reward proximity to goal
-        proximity_reward = min(
-            REWARD_PROXIMITY_BASE / (current_distance + 0.1), REWARD_PROXIMITY_MAX
-        )
+        proximity_reward = min(5.0 / (current_distance + 0.1), 12.0)
         self.reward += proximity_reward
 
         # penalty to prevent drone from flying straight into ground
         current_height = lin_pos[2]
         if current_height < 0.5:
-            ground_avoidance_penalty = GROUND_AVOIDANCE_SCALE * (0.5 - current_height)
+            ground_avoidance_penalty = 10.0 * (0.5 - current_height)
             self.reward -= ground_avoidance_penalty
 
         # terminate episode if drone hits the floor
         if current_height < 0.15:
-            floor_collision_penalty = FLOOR_CRASH_PENALTY
-            self.reward = -floor_collision_penalty
+            floor_collision_penalty = 50.0
+            self.reward -= floor_collision_penalty
             self.termination = True
             self.info["floor_crash"] = True
             self.info["collision"] = True
-            # Log reward components before returning
+
             self.info["reward_total"] = float(self.reward)
             self.info["reward_base"] = base_reward
             self.info["reward_distance_progress"] = distance_progress_reward
             self.info["reward_velocity_toward_goal"] = velocity_toward_goal_reward
             self.info["reward_goal_proximity"] = proximity_reward
             self.info["reward_ground_avoidance_penalty"] = ground_avoidance_penalty
-            self.info["reward_height_penalty"] = tree_height_penalty
+            self.info["reward_height_penalty"] = height_penalty
             self.info["reward_time_penalty"] = time_penalty
             self.info["reward_tree_collision_penalty"] = tree_collision_penalty
             self.info["reward_floor_collision_penalty"] = floor_collision_penalty
@@ -461,10 +460,8 @@ class QuadXForestEnv(QuadXWaypointsEnv):
         # height penalty if drone flies too high
         goal_height = goal_pos[2]
         if current_height > goal_height + 4.0:
-            tree_height_penalty = HEIGHT_PENALTY_SCALE * (
-                current_height - goal_height - 4.0
-            )
-            self.reward -= tree_height_penalty
+            height_penalty = 0.5 * (current_height - goal_height - 4.0)
+            self.reward -= height_penalty
 
         # time penalty
         time_penalty = self.time_step_penalty
@@ -477,18 +474,18 @@ class QuadXForestEnv(QuadXWaypointsEnv):
             self.termination = True
             self.info["tree_collision"] = True
             self.info["collision"] = True
-            # Log reward components before returning
+
             self.info["reward_total"] = float(self.reward)
             self.info["reward_base"] = base_reward
             self.info["reward_distance_progress"] = distance_progress_reward
             self.info["reward_velocity_toward_goal"] = velocity_toward_goal_reward
             self.info["reward_goal_proximity"] = proximity_reward
             self.info["reward_ground_avoidance_penalty"] = ground_avoidance_penalty
-            self.info["reward_height_penalty"] = tree_height_penalty
+            self.info["reward_height_penalty"] = height_penalty
             self.info["reward_time_penalty"] = time_penalty
             self.info["reward_tree_collision_penalty"] = tree_collision_penalty
-            self.info["reward_obstacle_proximity_penalty"] = obstacle_proximity_penalty
             self.info["reward_floor_collision_penalty"] = floor_collision_penalty
+            self.info["reward_obstacle_proximity_penalty"] = obstacle_proximity_penalty
             return
 
         # penalty if drone gets too close to obstacle
@@ -501,24 +498,23 @@ class QuadXForestEnv(QuadXWaypointsEnv):
                 obstacle_proximity_penalty = self.tree_proximity_penalty_weight * (1.0 - normalized) ** 2
                 self.reward -= obstacle_proximity_penalty
 
-        # waypoint reached!
+        # waypoint reached
         if self.waypoints.target_reached:
-            bonus = WAYPOINT_REWARD_BONUS
-            self.reward += bonus
+            self.reward += 100.0
             self.waypoints.advance_targets()
             if self.waypoints.all_targets_reached:
                 self.truncation = True
                 self.info["env_complete"] = True
 
-        # Store per-step reward breakdown in info for logging
+        # Final reward logging
         self.info["reward_total"] = float(self.reward)
         self.info["reward_base"] = base_reward
         self.info["reward_distance_progress"] = distance_progress_reward
         self.info["reward_velocity_toward_goal"] = velocity_toward_goal_reward
         self.info["reward_goal_proximity"] = proximity_reward
         self.info["reward_ground_avoidance_penalty"] = ground_avoidance_penalty
-        self.info["reward_height_penalty"] = tree_height_penalty
+        self.info["reward_height_penalty"] = height_penalty
         self.info["reward_time_penalty"] = time_penalty
         self.info["reward_tree_collision_penalty"] = tree_collision_penalty
-        self.info["reward_obstacle_proximity_penalty"] = obstacle_proximity_penalty
         self.info["reward_floor_collision_penalty"] = floor_collision_penalty
+        self.info["reward_obstacle_proximity_penalty"] = obstacle_proximity_penalty
