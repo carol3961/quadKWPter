@@ -49,7 +49,7 @@ ENT_COEF = 0.1
 # If True: resumes the most recent run_N (keeps training inside that same run folder).
 # If False: starts a brand new run_(N+1) folder (unless forking, see below).
 RESUME_LATEST_RUN = False
-EXP_NAME = "forest_obstacle_avoidance_v100"
+EXP_NAME = "forest_obstacle_avoidance_v101"
 # EXP_NAME = "test"
 CHECKPOINT_SAVE_FREQ = 50_000
 N_STACK = 2
@@ -57,7 +57,7 @@ FLIGHT_DOME_SIZE = 20.0
 
 # If START_FROM_RUN is not None, we will create a NEW run_N directory and initialize it from
 # a checkpoint in START_FROM_RUN (optionally at START_FROM_STEPS).
-START_FROM_RUN = "run_2"       # e.g. "run_1" or None
+START_FROM_RUN = None       # e.g. "run_1" or None
 START_FROM_STEPS =  None       # e.g. 100000 (int) or None -> uses latest checkpoint in START_FROM_RUN
 COPY_VECNORM_ON_FORK = True
 
