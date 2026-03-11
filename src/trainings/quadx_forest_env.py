@@ -35,7 +35,7 @@ class QuadXForestEnv(QuadXWaypointsEnv):
         goal_reach_angle: float = 0.1,
         flight_mode: int = 0,
         flight_dome_size: float = 10.0,
-        max_duration_seconds: float = 20.0,
+        max_duration_seconds: float = 30.0,
         angle_representation: Literal["euler", "quaternion"] = "quaternion",
         agent_hz: int = 30,
         render_mode: None | Literal["human", "rgb_array"] = None,
@@ -71,11 +71,18 @@ class QuadXForestEnv(QuadXWaypointsEnv):
 
         # Default goal area
         if goal_area is None:
+            far = 0.65 * flight_dome_size
+            near = 0.50 * flight_dome_size
             self.goal_area = {
-                'x_min': 5.0, 'x_max': 8.0,
-                'y_min': 5.0, 'y_max': 8.0,
-                'z_min': 1.5, 'z_max': 2.5,
+                'x_min': near, 'x_max': far,
+                'y_min': near, 'y_max': far,
+                'z_min': 1.5,  'z_max': 2.5,
             }
+            # self.goal_area = {
+            #     'x_min': 12.0, 'x_max': 16.0,
+            #     'y_min': 12.0, 'y_max': 16.0,
+            #     'z_min': 1.5,  'z_max': 2.5,
+            # }
         else:
             self.goal_area = goal_area
 
@@ -247,7 +254,7 @@ class QuadXForestEnv(QuadXWaypointsEnv):
         goal = np.array(self.waypoints.targets[0][:2], dtype=float)
 
         # Corridor controls (tune these)
-        corridor_width = 4.0          # same idea as v1 (half-width)
+        corridor_width = 0.25 * self.flight_dome_size
         max_attempts = 50             # attempts per tree
         min_start_clearance = 2.0     # v2 used 2
         min_waypoint_clearance = 2.0  # v2 used 2
@@ -431,59 +438,58 @@ class QuadXForestEnv(QuadXWaypointsEnv):
 
         velocity = np.array(lin_vel).flatten()
 
-        # reward progress toward goal
+        # 1. reward progress toward goal
         progress = self.previous_distance - current_distance
-        distance_progress_reward = 10.0 * np.clip(progress, -0.5, 0.5)
+        distance_progress_reward = 10.0 * np.clip(progress, -1.0, 0.5)
         self.reward += distance_progress_reward
         self.previous_distance = current_distance
+        # 2. reward velocity toward goal
+        # goal_direction = goal_pos - lin_pos
+        # goal_direction_norm = goal_direction / (np.linalg.norm(goal_direction) + 1e-8)
+        # speed_toward_goal = np.dot(velocity, goal_direction_norm)
+        # velocity_toward_goal_reward = 2.0 * np.clip(speed_toward_goal, -2.0, 2.0)
+        # self.reward += velocity_toward_goal_reward
 
-        # reward velocity toward goal
-        goal_direction = goal_pos - lin_pos
-        goal_direction_norm = goal_direction / (np.linalg.norm(goal_direction) + 1e-8)
-        speed_toward_goal = np.dot(velocity, goal_direction_norm)
-        velocity_toward_goal_reward = 2.0 * np.clip(speed_toward_goal, -2.0, 2.0)
-        self.reward += velocity_toward_goal_reward
+        # 3. reward proximity to goal
+        # proximity_reward = min(5.0 / (current_distance + 0.1), 12.0)
+        # self.reward += proximity_reward
 
-        # reward proximity to goal
-        proximity_reward = min(5.0 / (current_distance + 0.1), 12.0)
-        self.reward += proximity_reward
-
-        # penalty to prevent drone from flying straight into ground
-        current_height = lin_pos[2]
-        if current_height < 0.5:
-            ground_avoidance_penalty = 10.0 * (0.5 - current_height)
-            self.reward -= ground_avoidance_penalty
+        # 4. penalty to prevent drone from flying straight into ground
+        # current_height = lin_pos[2]
+        # if current_height < 0.5:
+        #     ground_avoidance_penalty = 10.0 * (0.5 - current_height)
+        #     self.reward -= ground_avoidance_penalty
 
         # terminate episode if drone hits the floor
-        if current_height < 0.15:
-            floor_collision_penalty = 50.0
-            self.reward -= floor_collision_penalty
-            self.termination = True
-            self.info["floor_crash"] = True
-            self.info["collision"] = True
+        # if current_height < 0.15:
+        #     floor_collision_penalty = 50.0
+        #     self.reward -= floor_collision_penalty
+        #     self.termination = True
+        #     self.info["floor_crash"] = True
+        #     self.info["collision"] = True
 
-            self.info["reward_total"] = float(self.reward)
-            self.info["reward_base"] = base_reward
-            self.info["reward_distance_progress"] = distance_progress_reward
-            self.info["reward_velocity_toward_goal"] = velocity_toward_goal_reward
-            self.info["reward_goal_proximity"] = proximity_reward
-            self.info["reward_ground_avoidance_penalty"] = ground_avoidance_penalty
-            self.info["reward_height_penalty"] = height_penalty
-            self.info["reward_time_penalty"] = time_penalty
-            self.info["reward_tree_collision_penalty"] = tree_collision_penalty
-            self.info["reward_floor_collision_penalty"] = floor_collision_penalty
-            self.info["reward_obstacle_proximity_penalty"] = obstacle_proximity_penalty
-            return
+        #     self.info["reward_total"] = float(self.reward)
+        #     self.info["reward_base"] = base_reward
+        #     self.info["reward_distance_progress"] = distance_progress_reward
+        #     self.info["reward_velocity_toward_goal"] = velocity_toward_goal_reward
+        #     self.info["reward_goal_proximity"] = proximity_reward
+        #     self.info["reward_ground_avoidance_penalty"] = ground_avoidance_penalty
+        #     self.info["reward_height_penalty"] = height_penalty
+        #     self.info["reward_time_penalty"] = time_penalty
+        #     self.info["reward_tree_collision_penalty"] = tree_collision_penalty
+        #     self.info["reward_floor_collision_penalty"] = floor_collision_penalty
+        #     self.info["reward_obstacle_proximity_penalty"] = obstacle_proximity_penalty
+        #     return
 
-        # height penalty if drone flies too high
-        goal_height = goal_pos[2]
-        if current_height > goal_height + 4.0:
-            height_penalty = 0.5 * (current_height - goal_height - 4.0)
-            self.reward -= height_penalty
+        # 5. height penalty if drone flies too high
+        # goal_height = goal_pos[2]
+        # if current_height > goal_height + 4.0:
+        #     height_penalty = 0.5 * (current_height - goal_height - 4.0)
+        #     self.reward -= height_penalty
 
-        # time penalty
-        time_penalty = self.time_step_penalty
-        self.reward -= time_penalty
+        # 6. time penalty
+        # time_penalty = self.time_step_penalty
+        # self.reward -= time_penalty
 
         # terminate episode if drone crashes into tree
         if self._check_tree_collision():
@@ -506,23 +512,23 @@ class QuadXForestEnv(QuadXWaypointsEnv):
             self.info["reward_obstacle_proximity_penalty"] = obstacle_proximity_penalty
             return
 
-        # penalty if drone gets too close to obstacle
-        obstacle_distances = self.state.get("obstacle_distances", None)
-        if obstacle_distances is not None:
-            min_distance = np.min(obstacle_distances)
-            danger_radius = 2.0
-            if min_distance < danger_radius:
-                normalized = min_distance / danger_radius
-                obstacle_proximity_penalty = self.tree_proximity_penalty_weight * (1.0 - normalized) ** 2
-                self.reward -= obstacle_proximity_penalty
+        # 8. penalty if drone gets too close to obstacle
+        # obstacle_distances = self.state.get("obstacle_distances", None)
+        # if obstacle_distances is not None:
+        #     min_distance = np.min(obstacle_distances)
+        #     danger_radius = 2.0
+        #     if min_distance < danger_radius:
+        #         normalized = min_distance / danger_radius
+        #         obstacle_proximity_penalty = self.tree_proximity_penalty_weight * (1.0 - normalized) ** 2
+        #         self.reward -= obstacle_proximity_penalty
 
-        # waypoint reached
-        if self.waypoints.target_reached:
-            self.reward += 100.0
-            self.waypoints.advance_targets()
-            if self.waypoints.all_targets_reached:
-                self.truncation = True
-                self.info["env_complete"] = True
+        # 9. waypoint reached
+        # if self.waypoints.target_reached:
+        #     self.reward += 100.0
+        #     self.waypoints.advance_targets()
+        #     if self.waypoints.all_targets_reached:
+        #         self.truncation = True
+        #         self.info["env_complete"] = True
 
         # Final reward logging
         self.info["reward_total"] = float(self.reward)

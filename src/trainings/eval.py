@@ -29,13 +29,13 @@ from PyFlyt.gym_envs import FlattenWaypointEnv
 from torch.utils.tensorboard import SummaryWriter
 
 from quadx_forest_env import QuadXForestEnv
-from train import NUM_TREES, N_STACK, EXP_NAME, NUM_SENSORS
+from train import NUM_TREES, N_STACK, EXP_NAME, NUM_SENSORS, FLIGHT_DOME_SIZE
 
 # =========================
 # CONFIG  (edit or override via CLI)
 # =========================
 RUN_ID          = "run_1"        # which run folder to evaluate
-NUM_TEST_WORLDS = 100
+NUM_TEST_WORLDS = 200
 TEST_SEEDS      = list(range(NUM_TEST_WORLDS))   # seeds 0-99, fixed forever
 
 NUM_TARGETS     = 1
@@ -87,7 +87,7 @@ def make_eval_env():
         num_sensors=NUM_SENSORS,
         sensor_range=SENSOR_RANGE,
         max_duration_seconds=30.0,
-        flight_dome_size=12.0,
+        flight_dome_size=FLIGHT_DOME_SIZE,
         goal_reach_distance=0.5,
     )
     return FlattenWaypointEnv(env, context_length=CONTEXT_LENGTH)
