@@ -25,6 +25,7 @@ from quadx_forest_env import (
     TREE_PROX_PENALTY_WEIGHT,
     TIME_STEP_PENALTY,
     TREE_COLLISION_PENALTY,
+    VELOCITY_TOWARD_GOAL_WEIGHT,
 )
 
 os.environ["IMAGEIO_FFMPEG_EXE"] = imageio_ffmpeg.get_ffmpeg_exe()
@@ -272,6 +273,7 @@ if __name__ == "__main__":
         "tree_proximity_penalty_weight": TREE_PROX_PENALTY_WEIGHT,
         "time_step_penalty": TIME_STEP_PENALTY,
         "tree_collision_penalty": TREE_COLLISION_PENALTY,
+        "velocity_toward_goal_weight": VELOCITY_TOWARD_GOAL_WEIGHT,
     }
     wandb.init(
         project="quadx-forest-obstacle-avoidance",

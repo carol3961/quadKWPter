@@ -562,6 +562,7 @@ class QuadXForestEnv(QuadXWaypointsEnv):
             self.info["reward_tree_collision_penalty"] = tree_collision_penalty
             self.info["reward_floor_collision_penalty"] = floor_collision_penalty
             self.info["reward_obstacle_proximity_penalty"] = obstacle_proximity_penalty
+
             return
 
         obstacle_distances = self.state.get("obstacle_distances", None)
