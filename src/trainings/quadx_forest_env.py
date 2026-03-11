@@ -37,6 +37,7 @@ class QuadXForestEnv(QuadXWaypointsEnv):
         flight_mode: int = 0,
         flight_dome_size: float = 10.0,
         max_duration_seconds: float = 30.0,
+        max_duration_seconds: float = 30.0,
         angle_representation: Literal["euler", "quaternion"] = "quaternion",
         agent_hz: int = 30,
         render_mode: None | Literal["human", "rgb_array"] = None,
@@ -74,11 +75,21 @@ class QuadXForestEnv(QuadXWaypointsEnv):
         if goal_area is None:
             far = 0.65 * flight_dome_size
             near = 0.50 * flight_dome_size
+            far = 0.65 * flight_dome_size
+            near = 0.50 * flight_dome_size
             self.goal_area = {
                 'x_min': near, 'x_max': far,
                 'y_min': near, 'y_max': far,
                 'z_min': 1.5,  'z_max': 2.5,
+                'x_min': near, 'x_max': far,
+                'y_min': near, 'y_max': far,
+                'z_min': 1.5,  'z_max': 2.5,
             }
+            # self.goal_area = {
+            #     'x_min': 12.0, 'x_max': 16.0,
+            #     'y_min': 12.0, 'y_max': 16.0,
+            #     'z_min': 1.5,  'z_max': 2.5,
+            # }
             # self.goal_area = {
             #     'x_min': 12.0, 'x_max': 16.0,
             #     'y_min': 12.0, 'y_max': 16.0,
@@ -254,6 +265,21 @@ class QuadXForestEnv(QuadXWaypointsEnv):
         """
 
         self.tree_positions = []
+
+        # Start and primary goal in XY
+        start = np.array(self.start_pos[0][:2], dtype=float)
+        goal = np.array(self.waypoints.targets[0][:2], dtype=float)
+
+        # Corridor controls (tune these)
+        corridor_width = 0.25 * self.flight_dome_size
+        max_attempts = 50             # attempts per tree
+        min_start_clearance = 2.0     # v2 used 2
+        min_waypoint_clearance = 2.0  # v2 used 2
+
+        direction = goal - start
+        norm = np.linalg.norm(direction) + 1e-8
+        direction_norm = direction / norm
+        perpendicular = np.array([-direction_norm[1], direction_norm[0]])
 
         start = np.array(self.start_pos[0][:2], dtype=float)
         goal = np.array(self.waypoints.targets[0][:2], dtype=float)
@@ -491,6 +517,7 @@ class QuadXForestEnv(QuadXWaypointsEnv):
         velocity = np.array(lin_vel).flatten()
 
         # 1. reward progress toward goal
+        # 1. reward progress toward goal
         progress = self.previous_distance - current_distance
         distance_progress_reward = 7.0 * np.clip(progress, -1.0, 0.5)
         self.reward += distance_progress_reward
@@ -533,13 +560,31 @@ class QuadXForestEnv(QuadXWaypointsEnv):
         #     self.info["reward_floor_collision_penalty"] = floor_collision_penalty
         #     self.info["reward_obstacle_proximity_penalty"] = obstacle_proximity_penalty
         #     return
+        #     self.info["reward_total"] = float(self.reward)
+        #     self.info["reward_base"] = base_reward
+        #     self.info["reward_distance_progress"] = distance_progress_reward
+        #     self.info["reward_velocity_toward_goal"] = velocity_toward_goal_reward
+        #     self.info["reward_goal_proximity"] = proximity_reward
+        #     self.info["reward_ground_avoidance_penalty"] = ground_avoidance_penalty
+        #     self.info["reward_height_penalty"] = height_penalty
+        #     self.info["reward_time_penalty"] = time_penalty
+        #     self.info["reward_tree_collision_penalty"] = tree_collision_penalty
+        #     self.info["reward_floor_collision_penalty"] = floor_collision_penalty
+        #     self.info["reward_obstacle_proximity_penalty"] = obstacle_proximity_penalty
+        #     return
 
         # 5. height penalty if drone flies too high
         # goal_height = goal_pos[2]
         # if current_height > goal_height + 4.0:
         #     height_penalty = 0.5 * (current_height - goal_height - 4.0)
         #     self.reward -= height_penalty
+        # 5. height penalty if drone flies too high
+        # goal_height = goal_pos[2]
+        # if current_height > goal_height + 4.0:
+        #     height_penalty = 0.5 * (current_height - goal_height - 4.0)
+        #     self.reward -= height_penalty
 
+        # 6. time penalty
         # 6. time penalty
         time_penalty = self.time_step_penalty
         self.reward -= time_penalty
