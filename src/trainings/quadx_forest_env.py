@@ -488,8 +488,8 @@ class QuadXForestEnv(QuadXWaypointsEnv):
         #     self.reward -= height_penalty
 
         # 6. time penalty
-        # time_penalty = self.time_step_penalty
-        # self.reward -= time_penalty
+        time_penalty = self.time_step_penalty
+        self.reward -= time_penalty
 
         # terminate episode if drone crashes into tree
         if self._check_tree_collision():

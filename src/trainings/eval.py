@@ -29,7 +29,7 @@ from PyFlyt.gym_envs import FlattenWaypointEnv
 from torch.utils.tensorboard import SummaryWriter
 
 from quadx_forest_env import QuadXForestEnv
-from train import NUM_TREES, N_STACK, EXP_NAME, NUM_SENSORS, FLIGHT_DOME_SIZE
+from train import N_STACK, EXP_NAME, NUM_SENSORS
 
 # =========================
 # CONFIG  (edit or override via CLI)
@@ -41,6 +41,8 @@ TEST_SEEDS      = list(range(NUM_TEST_WORLDS))   # seeds 0-99, fixed forever
 NUM_TARGETS     = 1
 SENSOR_RANGE    = 5.0
 CONTEXT_LENGTH  = 1
+FLIGHT_DOME_SIZE = 20
+NUM_TREES =  40
 
 # =========================
 # HELPERS

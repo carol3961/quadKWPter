@@ -9,8 +9,8 @@ from train import NUM_TREES, N_STACK, EXP_NAME, FLIGHT_DOME_SIZE
 # =========================
 # CONFIG
 # =========================
-EXP_NAME = EXP_NAME
-RUN_ID = "run_1"  # <-- change to run_2, run_3, etc.
+EXP_NAME = EXP_NAME  # <-- change to match your training exp nam
+RUN_ID = "run_2"  # <-- change to run_2, run_3, etc.
 
 NUM_TREES = NUM_TREES
 NUM_TARGETS = 1
@@ -88,7 +88,24 @@ if __name__ == "__main__":
             obs, rewards, dones, infos = env.step(action)
             # DummyVecEnv has a single env, so index 0
             if dones[0]:
+                info = infos[0]
+                if info.get("env_complete"):
+                    outcome = "✓ SUCCESS"
+                elif info.get("tree_collision"):
+                    outcome = "✗ TREE COLLISION"
+                elif info.get("out_of_bounds"):
+                    outcome = "✗ OUT OF BOUNDS"
+                elif info.get("collision"):
+                    outcome = "✗ GROUND COLLISION"
+                elif info.get("episode_timeout"):
+                    outcome = "✗ TIMEOUT"
+                else:
+                    outcome = "✗ UNKNOWN"
+                
+                print(f"{outcome}  |  targets_reached={info.get('num_targets_reached', 0)}  |  reward={info.get('reward_total', 0):.1f}")
                 obs = env.reset()
+                obs = env.reset()
+                
     except KeyboardInterrupt:
         print("\nExiting visualization.")
     finally:

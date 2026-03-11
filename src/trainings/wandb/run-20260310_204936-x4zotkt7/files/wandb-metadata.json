@@ -1,0 +1,37 @@
+{
+  "os": "macOS-26.2-arm64-arm-64bit",
+  "python": "CPython 3.10.19",
+  "startedAt": "2026-03-11T03:49:36.233966Z",
+  "program": "/Users/nikolaj/Desktop/quadKWPter/src/trainings/train.py",
+  "codePath": "src/trainings/train.py",
+  "codePathLocal": "train.py",
+  "git": {
+    "remote": "https://github.com/carol3961/quadKWPter.git",
+    "commit": "2c8c602a5d783816a911ffcd95cb0f6a7b21f52b"
+  },
+  "email": "nikolajk@uci.edu",
+  "root": "/Users/nikolaj/Desktop/quadKWPter/src/trainings",
+  "host": "dhcp-172-31-057-090.mobile.uci.edu",
+  "executable": "/Users/nikolaj/anaconda3/envs/drones2/bin/python",
+  "cpu_count": 8,
+  "cpu_count_logical": 8,
+  "disk": {
+    "/": {
+      "total": "245107195904",
+      "used": "205261459456"
+    }
+  },
+  "memory": {
+    "total": "17179869184"
+  },
+  "apple": {
+    "name": "Apple M1",
+    "ecpuCores": 4,
+    "pcpuCores": 4,
+    "gpuCores": 7,
+    "memoryGb": 16,
+    "swapTotalBytes": "1073741824",
+    "ramTotalBytes": "17179869184"
+  },
+  "writerId": "293r50yt8j2c7mbq4e3k94a94b4gqbvl"
+}
