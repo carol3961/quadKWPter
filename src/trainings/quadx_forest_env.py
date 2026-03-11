@@ -20,8 +20,8 @@ HEIGHT_PENALTY_SCALE = 0.5
 
 WAYPOINT_REWARD_BONUS = 100.0
 TREE_PROX_PENALTY_WEIGHT = 3.0
-TIME_STEP_PENALTY = 0.2
-TREE_COLLISION_PENALTY = 100.0
+TIME_STEP_PENALTY = 0.05
+TREE_COLLISION_PENALTY = 150.0
 
 class QuadXForestEnv(QuadXWaypointsEnv):
     """QuadX Waypoints Environment with trees and obstacle detection"""
@@ -35,14 +35,14 @@ class QuadXForestEnv(QuadXWaypointsEnv):
         goal_reach_angle: float = 0.1,
         flight_mode: int = 0,
         flight_dome_size: float = 10.0,
-        max_duration_seconds: float = 20.0,
+        max_duration_seconds: float = 30.0,
         angle_representation: Literal["euler", "quaternion"] = "quaternion",
         agent_hz: int = 30,
         render_mode: None | Literal["human", "rgb_array"] = None,
         render_resolution: tuple[int, int] = (480, 480),
         # Tree parameters
         num_trees: int = 20,
-        tree_radius_range: tuple[float, float] = (0.1, 0.3),
+        tree_radius_range: tuple[float, float] = (0.2, 0.3),
         tree_height_range: tuple[float, float] = (1.0, 2.0),
         tree_mesh_dir_path: str = os.path.join(os.getcwd(), "gazebo_pine_tree_model", "meshes"),
         tree_collision_penalty: float = TREE_COLLISION_PENALTY,
@@ -71,11 +71,18 @@ class QuadXForestEnv(QuadXWaypointsEnv):
 
         # Default goal area
         if goal_area is None:
+            far = 0.65 * flight_dome_size
+            near = 0.50 * flight_dome_size
             self.goal_area = {
-                'x_min': 5.0, 'x_max': 8.0,
-                'y_min': 5.0, 'y_max': 8.0,
-                'z_min': 1.5, 'z_max': 2.5,
+                'x_min': near, 'x_max': far,
+                'y_min': near, 'y_max': far,
+                'z_min': 1.5,  'z_max': 2.5,
             }
+            # self.goal_area = {
+            #     'x_min': 12.0, 'x_max': 16.0,
+            #     'y_min': 12.0, 'y_max': 16.0,
+            #     'z_min': 1.5,  'z_max': 2.5,
+            # }
         else:
             self.goal_area = goal_area
 
@@ -238,80 +245,149 @@ class QuadXForestEnv(QuadXWaypointsEnv):
 
 
     def _generate_trees(self):
-        """Randomly generates trees in the environment, avoiding points that contain
-        waypoints and the starting position"""
+        """Generates trees in a corridor between drone start and waypoint(s).
+
+        Always places NUM_BLOCKER_TREES directly on the straight-line path first,
+        so the agent can never win by flying straight every episode.
+        Remaining trees are placed randomly within the corridor as before.
+        """
+
         self.tree_positions = []
 
-        for _ in range(self.num_trees):
-            attempts = 0
-            is_valid_position = False
+        start = np.array(self.start_pos[0][:2], dtype=float)
+        goal = np.array(self.waypoints.targets[0][:2], dtype=float)
 
-            while attempts < 50:
-                # randomly position a tree within the flight dome at point (x, y, z (ground))
-                x = self.np_random.uniform(-self.flight_dome_size, self.flight_dome_size)
-                y = self.np_random.uniform(-self.flight_dome_size, self.flight_dome_size)
-                z = 0
-                pos = np.array([x, y, z])
+        corridor_width = 5
+        max_attempts = 100
+        min_start_clearance = 2.0
+        min_waypoint_clearance = 3.0
 
-                # check tree is far enough from drone starting position
-                if np.linalg.norm(pos[:2] - self.start_pos[0][:2]) < 2:
-                    attempts += 1
-                    continue
+        direction = goal - start
+        norm = np.linalg.norm(direction) + 1e-8
+        direction_norm = direction / norm
+        perpendicular = np.array([-direction_norm[1], direction_norm[0]])
 
-                # check tree is far enough from waypoints
-                is_too_close = False
-                if hasattr(self.waypoints, "targets"):
-                    for waypoint in self.waypoints.targets:
-                        if np.linalg.norm(pos[:2] - waypoint[:2]) < 2:
-                            is_too_close = True
-                            break
+        # Trees span full dome height so drone must always go around, never over
+        height = float(self.flight_dome_size)
 
-                if is_too_close:
-                    attempts += 1
-                    continue
-
-                # passed checks, is valid position
-                is_valid_position = True
-                break
-
-            if not is_valid_position:
-                continue
-
-            height = self.np_random.uniform(*self.tree_height_range)
-            radius = self.np_random.uniform(*self.tree_radius_range)
-            rotation = self.np_random.uniform(0, 2*np.pi)
-            orientation = p.getQuaternionFromEuler([0, 0, rotation])
-
-            # load Gazebo tree mesh
-            visual_shape = self.env.createVisualShape(
-                shapeType=self.env.GEOM_MESH,
-                fileName=self.tree_mesh_path,
-                meshScale=[height, height, height],
-                rgbaColor=[178/255, 172/255, 136/255, 1]
-            )
-
-            # use cylinder collision shape
+        def _spawn_tree(x: float, y: float, radius: float) -> None:
+            """Creates physics + visual body and appends to self.tree_positions."""
+            base_position = [x, y, height / 2]
             collision_shape = self.env.createCollisionShape(
                 shapeType=self.env.GEOM_CYLINDER,
                 radius=radius,
-                height=height
+                height=height,
             )
-
-            # create tree
+            visual_shape = self.env.createVisualShape(
+                shapeType=self.env.GEOM_CYLINDER,
+                radius=radius,
+                length=height,
+                rgbaColor=[34/255, 100/255, 34/255, 1],
+            )
             tree_id = self.env.createMultiBody(
                 baseMass=0,
                 baseCollisionShapeIndex=collision_shape,
                 baseVisualShapeIndex=visual_shape,
-                basePosition=[x, y, z],
-                baseOrientation=orientation
+                basePosition=base_position,
+                baseOrientation=[0, 0, 0, 1],
             )
-
             self.tree_positions.append({
-                'id': tree_id,
-                'position': np.array([x, y, z]),
-                'radius': radius,
-                'height': height
+                "id": tree_id,
+                "position": np.array([x, y, 0.0], dtype=float),
+                "radius": radius,
+                "height": height,
             })
+
+        def _is_valid_position(pos: np.ndarray, radius: float) -> bool:
+            """Shared validity checks for any candidate tree position."""
+            x, y = float(pos[0]), float(pos[1])
+
+            if abs(x) > self.flight_dome_size or abs(y) > self.flight_dome_size:
+                return False
+
+            if np.linalg.norm(pos[:2] - start) < min_start_clearance:
+                return False
+
+            if hasattr(self.waypoints, "targets"):
+                for wp in self.waypoints.targets:
+                    if np.linalg.norm(pos[:2] - np.array(wp[:2], dtype=float)) < min_waypoint_clearance:
+                        return False
+
+            for placed_tree in self.tree_positions:
+                min_sep = radius + placed_tree["radius"] + 0.2
+                if np.linalg.norm(pos[:2] - placed_tree["position"][:2]) < min_sep:
+                    return False
+
+            return True
+
+        # ------------------------------------------------------------------
+        # Phase 1 — Blocker trees: forced onto the straight-line path.
+        #
+        # We sample t in (0.25, 0.75) so blockers land in the middle stretch
+        # (not right next to start or goal), and restrict the perpendicular
+        # offset to ±0.3 m so the tree genuinely straddles the direct route.
+        # We attempt up to max_attempts times per blocker; if placement fails
+        # (very tight geometry) we skip rather than hang forever.
+        # ------------------------------------------------------------------
+        NUM_BLOCKERS = 2
+        BLOCKER_PERPENDICULAR_BAND = 0.3   # metres either side of centre line
+        # Space blockers evenly along the path so they don't cluster together
+        blocker_t_slots = [(i + 1) / (NUM_BLOCKERS + 1) for i in range(NUM_BLOCKERS)]
+        # Add a small random jitter so episodes aren't identical
+        BLOCKER_T_JITTER = 0.08
+
+        for t_center in blocker_t_slots:
+            radius = float(self.np_random.uniform(*self.tree_radius_range))
+            placed = False
+
+            for _ in range(max_attempts):
+                t = float(np.clip(
+                    t_center + self.np_random.uniform(-BLOCKER_T_JITTER, BLOCKER_T_JITTER),
+                    0.15, 0.85,
+                ))
+                center_point = start + t * (goal - start)
+                offset = self.np_random.uniform(-BLOCKER_PERPENDICULAR_BAND, BLOCKER_PERPENDICULAR_BAND)
+                xy_pos = center_point + offset * perpendicular
+                pos = np.array([float(xy_pos[0]), float(xy_pos[1]), 0.0], dtype=float)
+
+                if not _is_valid_position(pos, radius):
+                    continue
+
+                _spawn_tree(float(pos[0]), float(pos[1]), radius)
+                placed = True
+                break
+
+            if not placed:
+                print(f"[_generate_trees] Warning: could not place blocker tree (t≈{t_center:.2f}) after {max_attempts} attempts.")
+
+        # ------------------------------------------------------------------
+        # Phase 2 — Random corridor trees (same logic as before).
+        # We subtract the blockers already placed so total tree count stays
+        # equal to self.num_trees.
+        # ------------------------------------------------------------------
+        remaining = self.num_trees - len(self.tree_positions)
+
+        for _ in range(remaining):
+            radius = float(self.np_random.uniform(*self.tree_radius_range))
+            placed = False
+
+            for _ in range(max_attempts):
+                t = self.np_random.uniform(0.0, 1.0)
+                center_point = start + t * (goal - start)
+
+                offset = self.np_random.uniform(-corridor_width, corridor_width)
+                xy_pos = center_point + offset * perpendicular
+                pos = np.array([float(xy_pos[0]), float(xy_pos[1]), 0.0], dtype=float)
+
+                if not _is_valid_position(pos, radius):
+                    continue
+
+                _spawn_tree(float(pos[0]), float(pos[1]), radius)
+                placed = True
+                break
+
+            if not placed:
+                continue
 
 
     def render(self):
@@ -413,60 +489,56 @@ class QuadXForestEnv(QuadXWaypointsEnv):
 
         velocity = np.array(lin_vel).flatten()
 
-        # reward progress toward goal
+        # 1. reward progress toward goal
         progress = self.previous_distance - current_distance
-        distance_progress_reward = DISTANCE_PROGRESS_MAX_REWARD_PER_STEP * np.clip(progress, -0.5, 0.5)
+        distance_progress_reward = 7.0 * np.clip(progress, -1.0, 0.5)
         self.reward += distance_progress_reward
         self.previous_distance = current_distance
+        # 2. reward velocity toward goal
+        # goal_direction = goal_pos - lin_pos
+        # goal_direction_norm = goal_direction / (np.linalg.norm(goal_direction) + 1e-8)
+        # speed_toward_goal = np.dot(velocity, goal_direction_norm)
+        # velocity_toward_goal_reward = 1.0 * np.clip(speed_toward_goal, -2.0, 2.0)
+        # self.reward += velocity_toward_goal_reward
 
-        # reward velocity toward goal
-        goal_direction = goal_pos - lin_pos
-        goal_direction_norm = goal_direction / (np.linalg.norm(goal_direction) + 1e-8)
-        speed_toward_goal = np.dot(velocity, goal_direction_norm)
-        velocity_toward_goal_reward = VELOCITY_TOWARD_GOAL_MAX_REWARD_PER_STEP * np.clip(speed_toward_goal, -2.0, 2.0)
-        self.reward += velocity_toward_goal_reward
-
-        # reward proximity to goal
-        proximity_reward = min(
-            REWARD_PROXIMITY_BASE / (current_distance + 0.1),
-            REWARD_PROXIMITY_MAX,
-        )
+        # 3. reward proximity to goal
+        proximity_reward = min(3.0 / (current_distance + 0.1), 5.0)
         self.reward += proximity_reward
 
-        # penalty to prevent drone from flying straight into ground
+        # 4. penalty to prevent drone from flying straight into ground
         current_height = lin_pos[2]
         if current_height < 0.5:
-            ground_avoidance_penalty = GROUND_AVOIDANCE_SCALE * (0.5 - current_height)
+            ground_avoidance_penalty = 5.0 * (0.5 - current_height)
             self.reward -= ground_avoidance_penalty
 
         # terminate episode if drone hits the floor
-        if current_height < 0.15:
-            floor_collision_penalty = FLOOR_CRASH_PENALTY
-            self.reward -= floor_collision_penalty
-            self.termination = True
-            self.info["floor_crash"] = True
-            self.info["collision"] = True
+        # if current_height < 0.15:
+        #     floor_collision_penalty = 50.0
+        #     self.reward -= floor_collision_penalty
+        #     self.termination = True
+            # self.info["floor_crash"] = True
+            # self.info["collision"] = True
 
-            self.info["reward_total"] = float(self.reward)
-            self.info["reward_base"] = base_reward
-            self.info["reward_distance_progress"] = distance_progress_reward
-            self.info["reward_velocity_toward_goal"] = velocity_toward_goal_reward
-            self.info["reward_goal_proximity"] = proximity_reward
-            self.info["reward_ground_avoidance_penalty"] = ground_avoidance_penalty
-            self.info["reward_height_penalty"] = height_penalty
-            self.info["reward_time_penalty"] = time_penalty
-            self.info["reward_tree_collision_penalty"] = tree_collision_penalty
-            self.info["reward_floor_collision_penalty"] = floor_collision_penalty
-            self.info["reward_obstacle_proximity_penalty"] = obstacle_proximity_penalty
-            return
+        #     self.info["reward_total"] = float(self.reward)
+        #     self.info["reward_base"] = base_reward
+        #     self.info["reward_distance_progress"] = distance_progress_reward
+        #     self.info["reward_velocity_toward_goal"] = velocity_toward_goal_reward
+        #     self.info["reward_goal_proximity"] = proximity_reward
+        #     self.info["reward_ground_avoidance_penalty"] = ground_avoidance_penalty
+        #     self.info["reward_height_penalty"] = height_penalty
+        #     self.info["reward_time_penalty"] = time_penalty
+        #     self.info["reward_tree_collision_penalty"] = tree_collision_penalty
+        #     self.info["reward_floor_collision_penalty"] = floor_collision_penalty
+        #     self.info["reward_obstacle_proximity_penalty"] = obstacle_proximity_penalty
+        #     return
 
-        # height penalty if drone flies too high
-        goal_height = goal_pos[2]
-        if current_height > goal_height + 4.0:
-            height_penalty = HEIGHT_PENALTY_SCALE * (current_height - goal_height - 4.0)
-            self.reward -= height_penalty
+        # 5. height penalty if drone flies too high
+        # goal_height = goal_pos[2]
+        # if current_height > goal_height + 4.0:
+        #     height_penalty = 0.5 * (current_height - goal_height - 4.0)
+        #     self.reward -= height_penalty
 
-        # time penalty
+        # 6. time penalty
         time_penalty = self.time_step_penalty
         self.reward -= time_penalty
 
@@ -476,7 +548,6 @@ class QuadXForestEnv(QuadXWaypointsEnv):
             self.reward = -tree_collision_penalty
             self.termination = True
             self.info["tree_collision"] = True
-            self.info["collision"] = True
 
             self.info["reward_total"] = float(self.reward)
             self.info["reward_base"] = base_reward
@@ -491,23 +562,32 @@ class QuadXForestEnv(QuadXWaypointsEnv):
             self.info["reward_obstacle_proximity_penalty"] = obstacle_proximity_penalty
             return
 
-        # penalty if drone gets too close to obstacle
-        obstacle_distances = self.state.get("obstacle_distances", None)
-        if obstacle_distances is not None:
-            min_distance = np.min(obstacle_distances)
-            danger_radius = 2.0
-            if min_distance < danger_radius:
-                normalized = min_distance / danger_radius
-                obstacle_proximity_penalty = self.tree_proximity_penalty_weight * (1.0 - normalized) ** 2
-                self.reward -= obstacle_proximity_penalty
+        # 8. penalty if drone gets too close to obstacle
+        # obstacle_distances = self.state.get("obstacle_distances", None)
+        # if obstacle_distances is not None:
+        #     min_distance = np.min(obstacle_distances)
+        #     danger_radius = 2.0
+        #     if min_distance < danger_radius:
+        #         normalized = min_distance / danger_radius
+        #         obstacle_proximity_penalty = self.tree_proximity_penalty_weight * (1.0 - normalized) ** 2
+        #         self.reward -= obstacle_proximity_penalty
 
-        # waypoint reached
-        if self.waypoints.target_reached:
-            self.reward += WAYPOINT_REWARD_BONUS
-            self.waypoints.advance_targets()
-            if self.waypoints.all_targets_reached:
-                self.truncation = True
-                self.info["env_complete"] = True
+
+
+        # 9. waypoint reached
+        # if self.waypoints.target_reached:
+        #     self.reward += 100.0
+        #     self.waypoints.advance_targets()
+        #     if self.waypoints.all_targets_reached:
+        #         self.truncation = True
+        #         self.info["env_complete"] = True
+
+        # 10 boundary warning penalty
+        # dist_from_origin = np.linalg.norm(lin_pos)
+        # boundary_margin = 0.85 * self.flight_dome_size  # warn at 85% of dome radius
+        # if dist_from_origin > boundary_margin:
+        #     boundary_penalty = 5.0 * (dist_from_origin - boundary_margin)
+        #     self.reward -= boundary_penalty
 
         # Final reward logging
         self.info["reward_total"] = float(self.reward)
