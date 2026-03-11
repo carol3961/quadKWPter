@@ -36,8 +36,8 @@ os.environ["IMAGEIO_FFMPEG_EXE"] = imageio_ffmpeg.get_ffmpeg_exe()
 # --------------Hyperparameters for Training---------------
 NUM_ENVS = 8
 NUM_SENSORS = 8
-NUM_TREES = 15
-TOTAL_TIMESTEPS = 1_000_000
+NUM_TREES = 40
+TOTAL_TIMESTEPS = 500_000
 N_STEPS = 2048
 BATCH_SIZE = 1024
 LEARNING_RATE = 5e-4
@@ -49,14 +49,15 @@ ENT_COEF = 0.1
 # If True: resumes the most recent run_N (keeps training inside that same run folder).
 # If False: starts a brand new run_(N+1) folder (unless forking, see below).
 RESUME_LATEST_RUN = False
-EXP_NAME = "forest_obstacle_avoidance_v10"
+EXP_NAME = "forest_obstacle_avoidance_v100"
 # EXP_NAME = "test"
 CHECKPOINT_SAVE_FREQ = 50_000
 N_STACK = 2
+FLIGHT_DOME_SIZE = 20.0
 
 # If START_FROM_RUN is not None, we will create a NEW run_N directory and initialize it from
 # a checkpoint in START_FROM_RUN (optionally at START_FROM_STEPS).
-START_FROM_RUN = None       # e.g. "run_1" or None
+START_FROM_RUN = "run_2"       # e.g. "run_1" or None
 START_FROM_STEPS =  None       # e.g. 100000 (int) or None -> uses latest checkpoint in START_FROM_RUN
 COPY_VECNORM_ON_FORK = True
 
@@ -119,7 +120,7 @@ def make_env():
         num_sensors=NUM_SENSORS,
         sensor_range=5.0,
         max_duration_seconds=30.0,
-        flight_dome_size=12.0,
+        flight_dome_size=FLIGHT_DOME_SIZE,
         goal_reach_distance=0.5 # CHANGED
     )
     return FlattenWaypointEnv(env, context_length=1)
@@ -275,7 +276,7 @@ if __name__ == "__main__":
     }
     wandb.init(
         project="quadx-forest-obstacle-avoidance",
-        entity="nperroch-uci",
+        entity="nikolajk-uci",
         name=f"{EXP_NAME}_{run_id}",
         tags=[f"{EXP_NAME}", run_id],
         config=config,

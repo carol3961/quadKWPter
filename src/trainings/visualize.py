@@ -4,13 +4,13 @@ from stable_baselines3 import PPO
 from stable_baselines3.common.vec_env import DummyVecEnv, VecFrameStack, VecNormalize
 from PyFlyt.gym_envs import FlattenWaypointEnv
 from quadx_forest_env import QuadXForestEnv
-from train import NUM_TREES, N_STACK, EXP_NAME
+from train import NUM_TREES, N_STACK, EXP_NAME, FLIGHT_DOME_SIZE
 
 # =========================
 # CONFIG
 # =========================
 EXP_NAME = EXP_NAME
-RUN_ID = "run_21"  # <-- change to run_2, run_3, etc.
+RUN_ID = "run_1"  # <-- change to run_2, run_3, etc.
 
 NUM_TREES = NUM_TREES
 NUM_TARGETS = 1
@@ -42,7 +42,7 @@ def make_env():
         num_sensors=NUM_SENSORS,
         sensor_range=SENSOR_RANGE,
         max_duration_seconds=30.0,
-        flight_dome_size=12.0,
+        flight_dome_size=FLIGHT_DOME_SIZE,
     )
     env = FlattenWaypointEnv(env, context_length=CONTEXT_LENGTH)
     return env
