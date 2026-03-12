@@ -144,10 +144,12 @@ class QuadXForestEnv(QuadXWaypointsEnv):
 
         return self.state, self.info
 
+
     def compute_state(self) -> None:
         """Computes the state including obstacle sensor readings."""
         super().compute_state()
         self.state["obstacle_distances"] = self._get_obstacle_distances()
+
 
     def _get_obstacle_distances(self) -> np.ndarray:
         """Cast rays around the drone to detect obstacles."""
@@ -175,9 +177,6 @@ class QuadXForestEnv(QuadXWaypointsEnv):
 
         return distances
 
-    # ──────────────────────────────────────────────────────────────────────────
-    # Collision helpers
-    # ──────────────────────────────────────────────────────────────────────────
 
     def _check_tree_collision(self) -> bool:
         """Check if the drone has collided with any tree."""
@@ -195,6 +194,7 @@ class QuadXForestEnv(QuadXWaypointsEnv):
 
         return False
 
+
     def _get_tree_mesh_path(self):
         """Finds the mesh file for the pine tree model."""
         if os.path.exists(self.tree_mesh_dir_path):
@@ -205,6 +205,7 @@ class QuadXForestEnv(QuadXWaypointsEnv):
             if mesh_files:
                 return os.path.join(self.tree_mesh_dir_path, mesh_files[0])
         raise FileNotFoundError(f"No mesh files found in {self.tree_mesh_dir_path}")
+
 
     def _spawn_tree(self, x: float, y: float) -> None:
         """Creates a single tree at (x, y) and appends it to self.tree_positions."""
@@ -237,35 +238,19 @@ class QuadXForestEnv(QuadXWaypointsEnv):
             "height":   height,
         })
 
+
     def _generate_trees(self):
-        """
-        Generates trees in two passes:
-
-        Pass 1 — Blocking trees
-            Evenly spaced along the straight line from the drone spawn point to
-            the goal. These are guaranteed to sit directly in the drone's path,
-            forcing it to navigate around them.
-
-            Example with num_blocking_trees=3:
-                t = 0.25, 0.50, 0.75  →  quarter-way, mid-way, three-quarter-way
-
-        Pass 2 — Random background trees
-            Placed anywhere in the dome, respecting minimum clearance from the
-            spawn point and goal.
-        """
         self.tree_positions = []
 
         start_2d = np.array(self.start_pos[0][:2], dtype=float)
         goal_2d  = np.array(self.waypoints.targets[0][:2], dtype=float)
 
-        # ── Pass 1: blocking trees evenly spaced on the start → goal line ─────
         n = self.num_blocking_trees
         for i in range(1, n + 1):
-            t   = i / (n + 1)                          # e.g. 0.25, 0.50, 0.75
+            t   = i / (n + 1)                        
             mid = start_2d + t * (goal_2d - start_2d)
             self._spawn_tree(float(mid[0]), float(mid[1]))
 
-        # ── Pass 2: random background trees ───────────────────────────────────
         min_start_clearance    = 2.0
         min_waypoint_clearance = 2.0
 
@@ -374,7 +359,7 @@ class QuadXForestEnv(QuadXWaypointsEnv):
         speed_toward_goal   = np.dot(velocity, goal_direction_norm)
         self.reward += 2.0 * np.clip(speed_toward_goal, -2.0, 2.0)
 
-        # 3. Proximity to goal ─
+        # 3. Proximity to goal 
         proximity_reward = min(5.0 / (current_distance + 0.1), 12.0)
         self.reward += proximity_reward
 
