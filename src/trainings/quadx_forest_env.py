@@ -343,10 +343,6 @@ class QuadXForestEnv(QuadXWaypointsEnv):
 
         return rgba[:, :, :3].astype(np.uint8)
 
-    # ──────────────────────────────────────────────────────────────────────────
-    # Reward
-    # ──────────────────────────────────────────────────────────────────────────
-
     def compute_term_trunc_reward(self) -> None:
         """Compute reward with goal-seeking and obstacle avoidance."""
         super().compute_term_trunc_reward()
@@ -367,41 +363,41 @@ class QuadXForestEnv(QuadXWaypointsEnv):
 
         velocity = np.array(lin_vel).flatten()
 
-        # ── 1. Progress toward goal ───────────────────────────────────────────
+        # 1. Progress toward goal 
         progress = self.previous_distance - current_distance
         self.reward += 10.0 * np.clip(progress, -0.5, 0.5)
         self.previous_distance = current_distance
 
-        # ── 2. Velocity toward goal ───────────────────────────────────────────
+        # 2. Velocity toward goal 
         goal_direction      = goal_pos - lin_pos
         goal_direction_norm = goal_direction / (np.linalg.norm(goal_direction) + 1e-8)
         speed_toward_goal   = np.dot(velocity, goal_direction_norm)
         self.reward += 2.0 * np.clip(speed_toward_goal, -2.0, 2.0)
 
-        # ── 3. Proximity to goal ──────────────────────────────────────────────
+        # 3. Proximity to goal ─
         proximity_reward = min(5.0 / (current_distance + 0.1), 12.0)
         self.reward += proximity_reward
 
-        # ── 4. Ground avoidance (soft) ────────────────────────────────────────
+        # 4. Ground avoidance 
         if current_height < 0.5:
             self.reward -= 10.0 * (0.5 - current_height)
 
-        # ── 5. Floor crash ────────────────────────────────────────────────────
+        # 5. Floor crash 
         if current_height < 0.15:
             self.reward -= 50.0
             self.termination = True
             self.info["floor_crash"] = True
             return
 
-        # ── 6. Height penalty if flying too high ──────────────────────────────
+        # 6. Height penalty if flying too high
         goal_height = float(goal_pos[2])
         if current_height > goal_height + 4.0:
             self.reward -= 0.5 * (current_height - goal_height - 4.0)
 
-        # ── 7. Time penalty ───────────────────────────────────────────────────
+        # 7. Time penalty 
         self.reward -= self.time_step_penalty
 
-        # ── 8. Tree collision ─────────────────────────────────────────────────
+        # 8. Tree collision 
         if self._check_tree_collision():
             self.reward      = -self.tree_collision_penalty
             self.termination = True
@@ -409,7 +405,7 @@ class QuadXForestEnv(QuadXWaypointsEnv):
             self.info["collision"]      = True
             return
 
-        # ── 9. Obstacle proximity penalty ─────────────────────────────────────
+        # 9. Obstacle proximity penalty 
         obstacle_distances = self.state.get("obstacle_distances", None)
         if obstacle_distances is not None:
             min_distance  = float(np.min(obstacle_distances))
@@ -419,7 +415,7 @@ class QuadXForestEnv(QuadXWaypointsEnv):
                 obstacle_penalty = self.tree_proximity_penalty_weight * (1.0 - normalized) ** 2
                 self.reward     -= obstacle_penalty
 
-        # ── 10. Waypoint reached ──────────────────────────────────────────────
+        # 10. Waypoint reached
         if self.waypoints.target_reached:
             self.reward += 100.0
             self.waypoints.advance_targets()
