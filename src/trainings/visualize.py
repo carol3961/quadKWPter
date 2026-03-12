@@ -83,8 +83,8 @@ if __name__ == "__main__":
         while True:
             action, _ = model.predict(obs, deterministic=True)
             obs, reward, done, info = env.step(action)
-            if done:
-                obs = env.reset()
+            # if done:
+            #     obs = env.reset()
     except KeyboardInterrupt:
         print("\nExiting visualization.")
     finally:

@@ -32,7 +32,7 @@ ENT_COEF = 0.1
 # If True: resumes the most recent run_N (keeps training inside that same run folder).
 # If False: starts a brand new run_(N+1) folder (unless forking, see below).
 RESUME_LATEST_RUN = False
-EXP_NAME = "v8_forest_obstacle_avoidance"
+EXP_NAME = "v10_forest_obstacle_avoidance"
 CHECKPOINT_SAVE_FREQ = 100_000
 N_STACK = 2
 
