@@ -3,7 +3,7 @@ layout: default
 title: Final Report
 ---
 
-<iframe width="640" height="480" src="https://drive.google.com/file/d/1K7OqwXgI1QTIV79CIHs6YvczwFc77q1w/view?usp=sharing" title="Video" frameborder="0" allowfullscreen></iframe>
+<iframe width="640" height="480" src="https://drive.google.com/file/d/1K7OqwXgI1QTIV79CIHs6YvczwFc77q1w/preview" title="Video" frameborder="0" allowfullscreen></iframe>
 
 ## Project Summary
 
