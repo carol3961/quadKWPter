@@ -54,8 +54,6 @@ To configure our environment, we are inheriting from PyFlyt’s QuadXWaypointsEn
 
 We began our project by training our drone in a simple and sparse forest environment by only spawning 5 trees. By training in a sparse forest environment, we were better able to visualize the drone’s flight trajectory, and we learned that the drone would fly in an identical, slightly curved, path to the waypoint, regardless of if a tree was in its way or not. Since this is not the behavior we wanted the drone to learn, we worked on our reward function and hyperparameter tuning to improve the stability and accuracy of the tree environment so that the drone learns to meaningfully avoid the trees in the simple environment before moving on to a denser forest of 25 trees.
 
-<img src="./images/episode_comps.png" width="50%" />
-
 ### State and action space
 We then modified the state space to include the distance from the drone to any surrounding obstacles, which we calculate by projecting 8 rays from the drone’s body to detect obstacles within 5 meters. This is in addition to the attitude state (measurements related to velocity, orientation, auxiliary sensor data, etc.) and target deltas (drone’s relative position to waypoints) that are already provided in the QuadXWaypointsEnv class. With frame stacking (N_Stack = 2), our state space was effectively doubled to a total size of 64 dimensions. We did not modify the action space, which currently consists of continuous values for roll rate, pitch rate, yaw rate, and thrust.
 
@@ -103,7 +101,7 @@ The above image shows that the frames per second are wildly different between ru
 We are visualizing our drone using the render_mode=”human” argument in our custom class inherited from QuadXWaypoints, which allows us to see the drone learning to fly through the forest environment. When we began our project by training our drone in a relatively sparse forest environment, we observed that the drone often flew in the same pattern in its route to get to the waypoint, regardless of if there’s a tree in its way or not. Since the tree placement was sparse, the drone usually got lucky and there wasn’t a tree in its way and it quickly navigated to the waypoint. However, once we started training our drone in more dense forest environments this issue became more apparent and we needed to modify the reward function, the hyperparameters, and train for more episodes.
 
 <video width="320" height="240" controls>
-  <source src="rollout.mp4" type="video/mp4">
+  <source src="images/rollout.mp4" type="video/mp4">
   Your browser does not support the video tag.
 </video>
 
